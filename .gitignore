@@ -1,0 +1,19 @@
+# Environments
+.env
+.env.*
+!.env.example
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+build/
+
+# Python / Django
+__pycache__/
+*.pyc
+db.sqlite3
+Backend/.coverage
+
+# OS Junk
+.DS_Store

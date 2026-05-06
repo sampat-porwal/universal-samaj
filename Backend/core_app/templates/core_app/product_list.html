@@ -1,0 +1,17 @@
+<h1>Textile Stock List</h1>
+<table border="1">
+    <tr>
+        <th>Name</th>
+        <th>HSN Code</th>
+        <th>Stock</th>
+        <th>Price</th>
+    </tr>
+    {% for product in products %}
+    <tr>
+        <td>{{ product.name }}</td>
+        <td>{{ product.hsn_code }}</td>
+        <td>{{ product.stock_quantity }}</td>
+        <td>₹{{ product.price_per_meter }}</td>
+    </tr>
+    {% endfor %}
+</table>

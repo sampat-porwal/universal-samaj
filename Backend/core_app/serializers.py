@@ -1,0 +1,103 @@
+from rest_framework import serializers
+from django.contrib.auth import get_user_model
+from django.db.models import Q  # 🌟 NEW IMPORT FOR QUERYING CHILDREN
+from .models import (
+    CustomRole, SamajProfile, FamilyAlbum, AlbumImage, 
+    SamajCommittee, CommitteeMessage, ActivityTag, ActivityRegistration,
+    VerificationVote 
+)
+
+User = get_user_model()
+
+class CustomRoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomRole
+        fields = ['id', 'name', 'permissions', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    permissions = serializers.SerializerMethodField() 
+    custom_role_name = serializers.CharField(source='custom_role.name', read_only=True)
+
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'first_name', 'last_name', 'first_name_hi', 'last_name_hi', 
+            'email', 'mobile_no', 'aadhaar_no', 'role', 'custom_role', 
+            'custom_role_name', 'permissions', 'is_active'
+        ]
+
+    def get_permissions(self, obj):
+        if obj.role in ['SUPERADMIN', 'ADMIN']: return ["ALL_ACCESS"]
+        if getattr(obj, 'custom_role', None) and obj.custom_role.permissions: return obj.custom_role.permissions
+        role_upper = str(obj.role).upper()
+        if role_upper == 'STAFF': return ["view_dashboard", "edit_profile", "view_logs"] 
+        else: return ["view_dashboard"]
+
+# ==========================================
+# 🌟 FAMILY MEMBER SERIALIZER
+# ==========================================
+class FamilyMemberSerializer(serializers.ModelSerializer):
+    user = UserProfileSerializer(read_only=True)
+    class Meta:
+        model = SamajProfile
+        fields = ['id', 'samaj_id', 'profile_image', 'user', 'gender']
+
+# ==========================================
+# 🌟 SAMAJ ADVANCED SERIALIZER
+# ==========================================
+class SamajProfileSerializer(serializers.ModelSerializer):
+    user = UserProfileSerializer(read_only=True)
+    family_summary = serializers.JSONField(read_only=True)
+    
+    # RECURSIVE DATA
+    father = FamilyMemberSerializer(read_only=True)
+    mother = FamilyMemberSerializer(read_only=True)
+    spouse = FamilyMemberSerializer(read_only=True)
+    
+    # 🌟 NEW: CHILDREN LOGIC (Reverse Relation)
+    children = serializers.SerializerMethodField()
+    
+    # Voting Data
+    votes_count = serializers.SerializerMethodField()
+    voters_list = serializers.SerializerMethodField()
+    has_voted = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SamajProfile
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at', 'created_by', 'updated_by', 'verification_status']
+
+    # 🌟 FETCH CHILDREN: Aise profiles find karo jinka father ya mother yeh 'obj' hai
+    def get_children(self, obj):
+        kids = SamajProfile.objects.filter(Q(father=obj) | Q(mother=obj))
+        return FamilyMemberSerializer(kids, many=True).data
+
+    def get_votes_count(self, obj):
+        return obj.votes_received.count()
+
+    def get_voters_list(self, obj):
+        return [vote.core_member.first_name for vote in obj.votes_received.all()]
+
+    def get_has_voted(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.votes_received.filter(core_member=request.user).exists()
+        return False
+
+# Other serializers...
+class AlbumImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AlbumImage
+        fields = ['id', 'image', 'created_at']
+
+class FamilyAlbumSerializer(serializers.ModelSerializer):
+    images = AlbumImageSerializer(many=True, read_only=True)
+    class Meta:
+        model = FamilyAlbum
+        fields = ['id', 'name_en', 'name_hi', 'images', 'created_at']
+
+class SamajCommitteeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SamajCommittee
+        fields = ['id', 'name_en', 'name_hi', 'purpose', 'is_active']
