@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
+// 🌟 FIX: Added 'Users' to the import list below!
 import { MapPin, Phone, Mail, ShieldCheck, Heart, Edit, Camera, X, Search, Clock, CheckCircle, Send, Trash2, UserCheck, Users } from 'lucide-react';
 import Link from 'next/link';
 import api from '@/lib/api';
@@ -94,9 +95,7 @@ export default function MyProfilePage() {
             setSelectedMember(null);
             setSelectedRelation('');
             fetchMyData(); 
-        } catch (error: any) {
-            alert(error.response?.data?.error || "❌ Failed to send request.");
-        }
+        } catch (error: any) { alert(error.response?.data?.error || "❌ Failed to send request."); }
     };
 
     const handleRespondRequest = async (reqId: number, action: 'ACCEPT' | 'REJECT') => {
@@ -131,7 +130,7 @@ export default function MyProfilePage() {
 
     if (isLoading) return <div className="p-6 max-w-3xl mx-auto space-y-6"><div className="h-40 bg-gray-200 rounded-3xl animate-pulse"></div><div className="h-64 bg-gray-200 rounded-3xl animate-pulse"></div></div>;
 
-    // 🌟 BUILD FAMILY ARRAY (Including Children)
+    // 🌟 BUILD FULL FAMILY ARRAY (Core + Secondary)
     const familyMembers: any[] = [];
     if (samajProfile?.father && samajProfile.father.id) familyMembers.push({ type: 'Father', data: samajProfile.father });
     if (samajProfile?.mother && samajProfile.mother.id) familyMembers.push({ type: 'Mother', data: samajProfile.mother });
@@ -142,11 +141,17 @@ export default function MyProfilePage() {
             familyMembers.push({ type: relType, data: child });
         });
     }
+    if (samajProfile?.siblings && Array.isArray(samajProfile.siblings)) {
+        samajProfile.siblings.forEach((sibling: any) => {
+            const relType = sibling.gender === 'M' ? 'Brother' : 'Sister';
+            familyMembers.push({ type: relType, data: sibling });
+        });
+    }
 
     return (
         <div className="p-4 md:p-6 max-w-5xl mx-auto font-sans relative">
             
-            {/* 🌟 1. LINK MODAL (Unchanged) */}
+            {/* LINK MODAL */}
             {isLinkModalOpen && (
                 <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
@@ -168,9 +173,7 @@ export default function MyProfilePage() {
                                                 <div className="flex items-center gap-4">
                                                     <div className="relative w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center font-black text-blue-600 text-lg overflow-hidden shrink-0">
                                                         <span className="absolute z-0">{p.user?.first_name?.[0] || 'U'}</span>
-                                                        {p.profile_image && (
-                                                            <img src={getImgUrl(p.profile_image)} className="absolute inset-0 w-full h-full object-cover z-10" onError={(e) => e.currentTarget.style.display = 'none'} alt="" />
-                                                        )}
+                                                        {p.profile_image && <img src={getImgUrl(p.profile_image)} className="absolute inset-0 w-full h-full object-cover z-10" onError={(e) => e.currentTarget.style.display = 'none'} alt="" />}
                                                     </div>
                                                     <div>
                                                         <p className="font-black text-gray-800">{p.user?.first_name} {p.user?.last_name}</p>
@@ -187,9 +190,7 @@ export default function MyProfilePage() {
                                 <div className="bg-blue-50 p-6 rounded-2xl flex items-center gap-4 border border-blue-100">
                                     <div className="relative w-16 h-16 rounded-full bg-blue-200 flex items-center justify-center font-black text-blue-700 text-2xl border-2 border-white shadow-md overflow-hidden shrink-0">
                                         <span className="absolute z-0">{selectedMember.user?.first_name?.[0] || 'U'}</span>
-                                        {selectedMember.profile_image && (
-                                            <img src={getImgUrl(selectedMember.profile_image)} className="absolute inset-0 w-full h-full object-cover z-10" onError={(e) => e.currentTarget.style.display = 'none'} alt="" />
-                                        )}
+                                        {selectedMember.profile_image && <img src={getImgUrl(selectedMember.profile_image)} className="absolute inset-0 w-full h-full object-cover z-10" onError={(e) => e.currentTarget.style.display = 'none'} alt="" />}
                                     </div>
                                     <div>
                                         <p className="font-black text-xl text-blue-900">{selectedMember.user?.first_name} {selectedMember.user?.last_name}</p>
@@ -213,7 +214,7 @@ export default function MyProfilePage() {
                 </div>
             )}
 
-            {/* 🌟 2. EDIT PROFILE MODAL (Unchanged) */}
+            {/* EDIT PROFILE MODAL */}
             {isEditing && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-md shadow-2xl">
@@ -233,11 +234,7 @@ export default function MyProfilePage() {
 
             <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} accept="image/*" className="hidden" />
 
-            {/* ========================================== */}
-            {/* 🌟 NEW FULL-WIDTH LAYOUT STARTS HERE 🌟 */}
-            {/* ========================================== */}
-
-            {/* 🌟 3. TOP BANNER & AVATAR */}
+            {/* TOP BANNER & AVATAR */}
             <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-8">
                 <div className="h-32 md:h-40 bg-gradient-to-r from-blue-600 to-purple-600 relative">
                     <button onClick={() => setIsEditing(true)} className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl backdrop-blur-sm transition flex items-center gap-2 text-sm font-bold shadow-sm">
@@ -248,37 +245,24 @@ export default function MyProfilePage() {
                 <div className="px-6 md:px-10 pb-8 relative">
                     <div className="flex flex-col md:flex-row items-start justify-between gap-4 -mt-16 md:-mt-20">
                         <div className="flex flex-col md:flex-row md:items-end gap-4 md:gap-6">
-                            {/* STRICT AVATAR WRAPPER */}
                             <div className="relative z-20 shrink-0" style={{ width: '140px', height: '140px' }}>
                                 <div className="w-full h-full rounded-full bg-blue-50 border-[6px] border-white shadow-xl flex items-center justify-center text-blue-600 font-black text-6xl overflow-hidden relative">
                                     <span className="absolute z-0">{authProfile?.first_name?.charAt(0) || 'U'}</span>
-                                    {samajProfile.profile_image && (
-                                        <img 
-                                            src={getImgUrl(samajProfile.profile_image)} 
-                                            alt="" 
-                                            className="absolute inset-0 w-full h-full object-cover z-10"
-                                            onError={(e) => e.currentTarget.style.display = 'none'}
-                                        />
-                                    )}
+                                    {samajProfile.profile_image && <img src={getImgUrl(samajProfile.profile_image)} alt="" className="absolute inset-0 w-full h-full object-cover z-10" onError={(e) => e.currentTarget.style.display = 'none'} />}
                                 </div>
-                                <button 
-                                    onClick={() => fileInputRef.current?.click()} 
-                                    className="absolute bottom-1 right-1 z-30 bg-blue-600 text-white p-3 rounded-full border-4 border-white hover:bg-blue-700 transition shadow-lg cursor-pointer flex items-center justify-center hover:scale-105"
-                                >
+                                <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-1 right-1 z-30 bg-blue-600 text-white p-3 rounded-full border-4 border-white hover:bg-blue-700 transition shadow-lg cursor-pointer flex items-center justify-center hover:scale-105">
                                     <Camera size={20} />
                                 </button>
                             </div>
                             
                             <div className="mb-2">
-                                <h1 className="text-3xl md:text-4xl font-black text-gray-900 leading-tight">
-                                    {authProfile?.first_name} {authProfile?.last_name}
-                                </h1>
+                                <h1 className="text-3xl md:text-4xl font-black text-gray-900 leading-tight">{authProfile?.first_name} {authProfile?.last_name}</h1>
                                 <p className="text-gray-500 font-bold text-lg mt-1">{samajProfile.samaj_id}</p>
                             </div>
                         </div>
                         
                         {samajProfile.verification_status === 'VERIFIED' && (
-                            <div className="bg-green-50 text-green-700 border border-green-200 px-4 py-2 rounded-full flex items-center gap-2 text-sm font-black uppercase tracking-wider shadow-sm mt-4 md:mt-0 self-start md:self-end">
+                            <div className="bg-green-50 text-green-700 border border-green-200 px-4 py-2 rounded-full flex items-center gap-2 text-sm font-black uppercase tracking-wider shadow-sm mt-4 md:mt-0 self-start md:self-end shrink-0">
                                 <ShieldCheck size={18} /> Verified Member
                             </div>
                         )}
@@ -286,7 +270,7 @@ export default function MyProfilePage() {
                 </div>
             </div>
 
-            {/* 🌟 4. MIDDLE SECTION: BASIC INFO */}
+            {/* MIDDLE SECTION: BASIC INFO */}
             <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 mb-8">
                 <h2 className="text-xl font-black text-gray-800 mb-6 border-b border-gray-100 pb-4">Personal Information</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -309,18 +293,14 @@ export default function MyProfilePage() {
                 </div>
             </div>
 
-            {/* 🌟 5. BOTTOM SECTION: CORE FAMILY GRAPH & REQUESTS */}
+            {/* BOTTOM SECTION: CORE FAMILY GRAPH & REQUESTS */}
             <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100">
                 <div className="flex justify-between items-center border-b border-gray-100 mb-6 pb-4">
-                    <h2 className="text-xl font-black text-gray-800 flex items-center gap-2">
-                        <Heart className="text-pink-500" size={24} /> Family Relationships
-                    </h2>
-                    <button onClick={() => setIsLinkModalOpen(true)} className="bg-blue-100 text-blue-700 hover:bg-blue-200 font-black text-sm px-4 py-2 rounded-xl transition shadow-sm hidden sm:block">
-                        + Add Relative
-                    </button>
+                    <h2 className="text-xl font-black text-gray-800 flex items-center gap-2"><Heart className="text-pink-500" size={24} /> Family Relationships</h2>
+                    <button onClick={() => setIsLinkModalOpen(true)} className="bg-blue-100 text-blue-700 hover:bg-blue-200 font-black text-sm px-4 py-2 rounded-xl transition shadow-sm hidden sm:block">+ Add Relative</button>
                 </div>
                 
-                {/* 🌟 PENDING REQUESTS TO ACCEPT (Full Width) */}
+                {/* PENDING REQUESTS TO ACCEPT */}
                 {pendingRequests.length > 0 && (
                     <div className="mb-6 border bg-yellow-50 border-yellow-300 shadow-md rounded-2xl p-4 md:p-6 transition-all">
                         <div className="flex items-center gap-2 font-black mb-4 text-sm text-yellow-800"><Clock size={18}/> Requests to Accept ({pendingRequests.length})</div>
@@ -347,7 +327,7 @@ export default function MyProfilePage() {
                     </div>
                 )}
 
-                {/* 🌟 SENT REQUESTS (CANCEL OPTION) (Full Width) */}
+                {/* SENT REQUESTS */}
                 {sentRequests.length > 0 && (
                     <div className="mb-8 border rounded-2xl p-4 md:p-6 bg-blue-50 border-blue-200 shadow-sm">
                         <div className="flex items-center gap-2 font-black mb-4 text-sm text-blue-800"><Send size={18}/> Sent Requests ({sentRequests.length})</div>
@@ -371,7 +351,7 @@ export default function MyProfilePage() {
                     </div>
                 )}
 
-                {/* 🌟 ACTUAL FAMILY GRID (Like Public Directory) */}
+                {/* FAMILY GRID */}
                 {familyMembers.length === 0 ? (
                     <div className="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
                         <p className="text-sm text-gray-500 font-bold mb-4 px-2">Your family tree is empty. Connect with your relatives!</p>
@@ -385,9 +365,7 @@ export default function MyProfilePage() {
                                     <div className="flex items-center gap-3">
                                         <div className="relative w-12 h-12 rounded-full bg-blue-200 text-blue-700 font-black flex items-center justify-center overflow-hidden shrink-0 border-2 border-white shadow-sm">
                                             <span className="absolute z-0">{fam.data.user?.first_name?.charAt(0) || 'U'}</span>
-                                            {fam.data.profile_image && (
-                                                <img src={getImgUrl(fam.data.profile_image)} className="absolute inset-0 w-full h-full object-cover z-10" onError={(e) => e.currentTarget.style.display = 'none'} alt=""/>
-                                            )}
+                                            {fam.data.profile_image && <img src={getImgUrl(fam.data.profile_image)} className="absolute inset-0 w-full h-full object-cover z-10" onError={(e) => e.currentTarget.style.display = 'none'} alt=""/>}
                                         </div>
                                         <div>
                                             <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-0.5">{fam.type}</p>
@@ -403,7 +381,6 @@ export default function MyProfilePage() {
                             </Link>
                         ))}
                         
-                        {/* Mobile specific Add Relative button */}
                         <div className="sm:hidden w-full">
                             <button onClick={() => setIsLinkModalOpen(true)} className="w-full bg-white border-2 border-blue-100 text-blue-600 hover:bg-blue-50 font-black text-sm px-6 py-4 rounded-xl transition shadow-sm">+ Add More Relatives</button>
                         </div>
