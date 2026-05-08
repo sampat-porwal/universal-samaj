@@ -5,50 +5,14 @@ import { useRouter } from "next/navigation";
 import { 
     Menu, X, LogOut, ChevronDown, ChevronRight, Settings, 
     LayoutDashboard, Users, IndianRupee, CreditCard, Building 
-} from "lucide-react"; // 🌟 ADDED: Building icon for Samaj
+} from "lucide-react"; 
 import api from '@/lib/api';
 
 import AiChatbox from "../components/AiChatbox";
 
 // UNIVERSAL NESTED MENU FOR TEMPLATE
-const DYNAMIC_MODULES = [
-    // 🌟 NEW: Samaj Community Module
-    {
-      category: "Samaj Community",
-      icon: <Building size={20} />,
-      requiredPerm: "view_dashboard", // Standard users ko directory dekhne ki permission hai
-      items: [
-        { name: "Samaj Directory", path: "/dashboard/samaj", icon: "📖" }
-      ]
-    },
-    {
-      category: "Finance & Accounts",
-      icon: <IndianRupee size={20} />,
-      requiredPerm: "manage_finances", 
-      items: [
-        { name: "Universal Cashbook", path: "/dashboard/payments", icon: "💸" }
-      ]
-    },
-    {
-      category: "Security & Staff",
-      icon: <Users size={20} />,
-      requiredPerm: "manage_users", 
-      items: [
-        { name: "Staff & Roles", path: "/dashboard/staff", icon: "👥" },
-        { name: "Audit Logs", path: "/dashboard/logs", icon: "🕵️‍♂️" },
-        { name: "Verify Pending", path: "/dashboard/verify", icon: "✅" }
-      ]
-    },
-    // Modular Billing & Upgrade Section
-    {
-      category: "Billing & Subscriptions",
-      icon: <CreditCard size={20} />,
-      requiredPerm: "manage_settings", 
-      items: [
-        { name: "Upgrade Plan", path: "/upgrade", icon: "⭐" }, 
-      ]
-    }
-];
+// 🌟 NOTE: We don't define DYNAMIC_MODULES outside anymore 
+// because we need access to 'userRole' to conditionally show "Bulk Import"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -100,6 +64,49 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     localStorage.clear(); 
     router.push("/login"); 
   };
+
+  // 🌟 DYNAMIC MODULES (Moved inside component so we can check userRole)
+  const DYNAMIC_MODULES = [
+      {
+        category: "Samaj Community",
+        icon: <Building size={20} />,
+        requiredPerm: "view_dashboard", 
+        items: [
+          { name: "Samaj Directory", path: "/dashboard/samaj", icon: "📖" },
+          // 🌟 NEW: Bulk Import added conditionally ONLY for SUPERADMIN / ADMIN
+          ...(userRole === 'SUPERADMIN' || userRole === 'ADMIN' 
+              ? [{ name: "Bulk Onboarding", path: "/community/admin/bulk-import", icon: "☁️" }] 
+              : []
+          )
+        ]
+      },
+      {
+        category: "Finance & Accounts",
+        icon: <IndianRupee size={20} />,
+        requiredPerm: "manage_finances", 
+        items: [
+          { name: "Universal Cashbook", path: "/dashboard/payments", icon: "💸" }
+        ]
+      },
+      {
+        category: "Security & Staff",
+        icon: <Users size={20} />,
+        requiredPerm: "manage_users", 
+        items: [
+          { name: "Staff & Roles", path: "/dashboard/staff", icon: "👥" },
+          { name: "Audit Logs", path: "/dashboard/logs", icon: "🕵️‍♂️" },
+          { name: "Verify Pending", path: "/dashboard/verify", icon: "✅" }
+        ]
+      },
+      {
+        category: "Billing & Subscriptions",
+        icon: <CreditCard size={20} />,
+        requiredPerm: "manage_settings", 
+        items: [
+          { name: "Upgrade Plan", path: "/upgrade", icon: "⭐" }, 
+        ]
+      }
+  ];
 
   if (!isAuthorized) {
     return (

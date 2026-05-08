@@ -3,13 +3,13 @@ import React, { useState, useEffect } from 'react';
 import { Users, Plus, X, CheckCircle, Shield, Check, Lock, Trash2, Edit, AlertCircle } from "lucide-react";
 import api from '@/lib/api';
 
-// 🌟 UNIVERSAL PERMISSIONS LIST FOR TEMPLATE
+// 🌟 UPDATED: UNIVERSAL PERMISSIONS LIST FOR SAMAJ PORTAL
 const AVAILABLE_PERMISSIONS = [
     { id: 'view_dashboard', label: 'View Dashboard & Stats', module: 'General' },
     { id: 'manage_users', label: 'Add / Edit / Delete Users', module: 'User Management' },
     { id: 'manage_roles', label: 'Manage Custom Roles', module: 'Security' },
-    { id: 'view_reports', label: 'View System Reports', module: 'Analytics' },
-    { id: 'manage_settings', label: 'Edit System Settings', module: 'Settings' },
+    { id: 'manage_events', label: 'Create & Manage Events', module: 'Community' },
+    { id: 'manage_directory', label: 'Manage Samaj Directory', module: 'Community' },
     { id: 'view_logs', label: 'View System Audit Logs', module: 'Security' },
 ];
 
@@ -60,7 +60,6 @@ export default function StaffAndRolesPage() {
 
     const fetchStaff = async () => {
         try {
-            // 🌟 FIXED ROUTE: No double /api
             const res = await api.get('/staff/');
             setStaffList(res.data || []);
         } catch (error) { console.error("Error fetching staff:", error); }
@@ -68,7 +67,6 @@ export default function StaffAndRolesPage() {
 
     const fetchRoles = async () => {
         try {
-            // 🌟 FIXED ROUTE: No double /api
             const res = await api.get('/roles/');
             setRolesList(res.data || []);
         } catch (error) { console.error("Failed to fetch roles", error); }
@@ -89,7 +87,6 @@ export default function StaffAndRolesPage() {
         if (password !== confirmPassword) return alert("❌ Error: Passwords do not match!");
         
         try {
-            // 🌟 FIXED ROUTE: No double /api
             await api.post('/staff/', { 
                 username: safeUsername, 
                 first_name: firstName,
@@ -98,7 +95,7 @@ export default function StaffAndRolesPage() {
                 role: baseRole, 
                 custom_role_id: selectedCustomRoleId || null 
             });
-            alert(`✅ Staff Created Successfully!`);
+            alert(`✅ User Created Successfully!`);
             setShowStaffForm(false);
             setUsername(''); setFirstName(''); setEmail(''); setPassword(''); setConfirmPassword(''); setBaseRole('USER'); setSelectedCustomRoleId('');
             fetchStaff();
@@ -106,15 +103,14 @@ export default function StaffAndRolesPage() {
     };
 
     const handleDeleteStaff = async (staffId: number) => {
-        if (!canManageStaff) return alert("You do not have permission to delete staff.");
-        if (!confirm("⚠️ Are you sure you want to remove this staff member permanently?")) return;
+        if (!canManageStaff) return alert("You do not have permission to delete users.");
+        if (!confirm("⚠️ Are you sure you want to remove this user permanently?")) return;
         
         try {
-            // 🌟 FIXED ROUTE
             await api.delete(`/staff/${staffId}/`);
-            alert("✅ Staff deleted successfully!");
+            alert("✅ User deleted successfully!");
             fetchStaff();
-        } catch (error) { alert("❌ Failed to delete staff"); }
+        } catch (error) { alert("❌ Failed to delete user"); }
     };
 
     const openEditModal = (staff: any) => {
@@ -122,13 +118,12 @@ export default function StaffAndRolesPage() {
     };
 
     const handleUpdateStaff = async () => {
-        if (!canManageStaff) return alert("You do not have permission to edit staff.");
+        if (!canManageStaff) return alert("You do not have permission to edit users.");
         try {
-            // 🌟 FIXED ROUTE
             await api.put(`/staff/${editStaffId}/`, { role: editBaseRole, custom_role_id: editCustomRoleId || null });
-            alert("✅ Staff Role Updated!");
+            alert("✅ User Role Updated!");
             setShowEditModal(false); fetchStaff();
-        } catch (error) { alert("❌ Failed to update staff"); }
+        } catch (error) { alert("❌ Failed to update user"); }
     };
 
     // ==========================================
@@ -165,11 +160,9 @@ export default function StaffAndRolesPage() {
             const payload = { name: safeRoleName, permissions: selectedPerms };
             
             if (editRoleId) {
-                // 🌟 FIXED ROUTE
                 await api.put(`/roles/${editRoleId}/`, payload);
                 alert("✅ Role updated successfully!");
             } else {
-                // 🌟 FIXED ROUTE
                 await api.post('/roles/', payload);
                 alert("✅ Role created successfully!");
             }
@@ -188,7 +181,6 @@ export default function StaffAndRolesPage() {
         if (!confirm("⚠️ Are you sure you want to delete this Role?")) return;
         
         try {
-            // 🌟 FIXED ROUTE
             await api.delete(`/roles/${roleId}/`);
             alert("✅ Role deleted!");
             fetchRoles();
@@ -203,10 +195,10 @@ export default function StaffAndRolesPage() {
                         {activeTab === 'STAFF' ? <Users className="text-blue-600" size={28} /> : <Shield className="text-purple-600" size={28} />}
                         Team & Security Management
                     </h1>
-                    <p className="text-gray-500 mt-1 font-medium">Manage your employees, assign roles, and control access permissions.</p>
+                    <p className="text-gray-500 mt-1 font-medium">Manage your community leaders, assign roles, and control access permissions.</p>
                 </div>
                 <div className="flex bg-gray-100 p-1 rounded-xl">
-                    <button onClick={() => setActiveTab('STAFF')} className={`px-6 py-2.5 rounded-lg font-bold transition ${activeTab === 'STAFF' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Staff Directory</button>
+                    <button onClick={() => setActiveTab('STAFF')} className={`px-6 py-2.5 rounded-lg font-bold transition ${activeTab === 'STAFF' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>User Directory</button>
                     <button onClick={() => setActiveTab('ROLES')} className={`px-6 py-2.5 rounded-lg font-bold transition ${activeTab === 'ROLES' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Roles Builder</button>
                 </div>
             </div>
@@ -215,11 +207,11 @@ export default function StaffAndRolesPage() {
             {!canManageStaff && activeTab === 'STAFF' && (
                 <div className="mb-6 bg-yellow-50 border border-yellow-200 p-4 rounded-xl flex items-center gap-3 text-yellow-800 font-medium">
                     <AlertCircle size={20} className="text-yellow-600" />
-                    You are in "View-Only" mode. Only administrators can modify staff.
+                    You are in "View-Only" mode. Only administrators can modify users.
                 </div>
             )}
 
-            {/* TAB 1: STAFF */}
+            {/* TAB 1: STAFF (USER MANAGEMENT) */}
             {activeTab === 'STAFF' && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                     {canManageStaff && (
@@ -247,12 +239,17 @@ export default function StaffAndRolesPage() {
                                         <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Email Address <span className="text-red-500">*</span></label>
                                         <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full border p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"/>
                                     </div>
+                                    
+                                    {/* 🌟 UPDATED: BASE ROLE SELECTION FOR SAMAJ */}
                                     <div>
                                         <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Base Level</label>
                                         <select value={baseRole} onChange={e => setBaseRole(e.target.value)} className="w-full border p-3 rounded-xl font-bold">
                                             <option value="USER">Standard User</option>
-                                            <option value="MANAGER">Manager</option>
-                                            <option value="ADMIN">System Admin</option>
+                                            <option value="CORE_MEMBER">Core Member (Verifier)</option>
+                                            <option value="CORE_ADMIN">Core Admin (Samaj Leader)</option>
+                                            <option value="EVENT_ADMIN">Event Manager</option>
+                                            <option value="STAFF">ERP Staff</option>
+                                            <option value="SUPERADMIN">System Owner</option>
                                         </select>
                                     </div>
                                     
@@ -393,7 +390,7 @@ export default function StaffAndRolesPage() {
                 </div>
             )}
 
-            {/* EDIT STAFF MODAL */}
+            {/* 🌟 EDIT STAFF MODAL (UPDATED DROPDOWN) */}
             {showEditModal && canManageStaff && (
                 <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
@@ -403,8 +400,11 @@ export default function StaffAndRolesPage() {
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Base Level</label>
                                 <select value={editBaseRole} onChange={e => setEditBaseRole(e.target.value)} className="w-full border p-3 rounded-xl bg-gray-50 font-bold outline-none">
                                     <option value="USER">Standard User</option>
-                                    <option value="MANAGER">Manager</option>
-                                    <option value="ADMIN">System Admin</option>
+                                    <option value="CORE_MEMBER">Core Member (Verifier)</option>
+                                    <option value="CORE_ADMIN">Core Admin (Samaj Leader)</option>
+                                    <option value="EVENT_ADMIN">Event Manager</option>
+                                    <option value="STAFF">ERP Staff</option>
+                                    <option value="SUPERADMIN">System Owner</option>
                                 </select>
                             </div>
                             <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">

@@ -1,7 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
-// 🌟 FIX: Added 'Users' to the import list below!
-import { MapPin, Phone, Mail, ShieldCheck, Heart, Edit, Camera, X, Search, Clock, CheckCircle, Send, Trash2, UserCheck, Users } from 'lucide-react';
+import { MapPin, Phone, Mail, ShieldCheck, Heart, Edit, Camera, X, Search, Clock, CheckCircle, Send, Trash2, UserCheck, Users, AlertTriangle, Briefcase, GraduationCap } from 'lucide-react';
 import Link from 'next/link';
 import api from '@/lib/api';
 
@@ -11,7 +10,16 @@ export default function MyProfilePage() {
     const [isLoading, setIsLoading] = useState(true);
 
     const [isEditing, setIsEditing] = useState(false);
-    const [editForm, setEditForm] = useState({ mobile_no: '', village_en: '', gotra_en: '' });
+    
+    // 🌟 EXTENDED EDIT FORM STATE
+    const [editForm, setEditForm] = useState({ 
+        mobile_no: '', email: '', 
+        village_en: '', gotra_en: '', 
+        dob: '', address_1: '', 
+        education: '', occupation_en: '', 
+        new_password: '' 
+    });
+    
     const [isSaving, setIsSaving] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -35,10 +43,21 @@ export default function MyProfilePage() {
 
             const samajRes = await api.get('/samaj/profiles/');
             const myProfile = samajRes.data.find((p: any) => p.user.username === authRes.data.username);
-            setSamajProfile(myProfile);
-
-            if (myProfile && authRes.data) {
-                setEditForm({ mobile_no: authRes.data.mobile_no || '', village_en: myProfile.village_en || '', gotra_en: myProfile.gotra_en || '' });
+            
+            if (myProfile) {
+                setSamajProfile(myProfile);
+                // 🌟 POPULATE EXTENDED DATA
+                setEditForm({ 
+                    mobile_no: authRes.data.mobile_no || '', 
+                    email: authRes.data.email || '',
+                    village_en: myProfile.village_en || '', 
+                    gotra_en: myProfile.gotra_en || '', 
+                    dob: myProfile.dob || '',
+                    address_1: myProfile.address_1 || '',
+                    education: myProfile.education || '',
+                    occupation_en: myProfile.occupation_en || '',
+                    new_password: '' 
+                });
             }
 
             const verified = samajRes.data.filter((p: any) => p.verification_status === 'VERIFIED' && p.id !== myProfile?.id);
@@ -73,12 +92,30 @@ export default function MyProfilePage() {
 
     const handleProfileUpdate = async (e: React.FormEvent) => {
         e.preventDefault();
+        if(!samajProfile) return;
         setIsSaving(true);
         try {
-            await api.patch('/auth/profile/', { mobile_no: editForm.mobile_no });
-            await api.patch(`/samaj/profiles/${samajProfile.id}/`, { village_en: editForm.village_en, gotra_en: editForm.gotra_en });
-            alert("✅ Profile details updated!");
+            // Update Auth Data (Email, Mobile, Password)
+            const authPayload: any = { mobile_no: editForm.mobile_no, email: editForm.email };
+            if (editForm.new_password.trim() !== '') {
+                authPayload.password = editForm.new_password; 
+            }
+            await api.patch('/auth/profile/', authPayload);
+
+            // Update Samaj Profile Data
+            const samajPayload = {
+                village_en: editForm.village_en,
+                gotra_en: editForm.gotra_en,
+                dob: editForm.dob || null, // null check for empty date
+                address_1: editForm.address_1,
+                education: editForm.education,
+                occupation_en: editForm.occupation_en
+            };
+            await api.patch(`/samaj/profiles/${samajProfile.id}/`, samajPayload);
+            
+            alert("✅ Profile details updated successfully!");
             setIsEditing(false);
+            setEditForm({ ...editForm, new_password: '' }); 
             fetchMyData(); 
         } catch (error) { alert("❌ Failed to update profile details."); } 
         finally { setIsSaving(false); }
@@ -86,23 +123,16 @@ export default function MyProfilePage() {
 
     const handleSendLinkRequest = async () => {
         try {
-            await api.post('/samaj/profiles/send_family_request/', {
-                receiver_id: selectedMember.id,
-                relation_type: selectedRelation
-            });
+            await api.post('/samaj/profiles/send_family_request/', { receiver_id: selectedMember.id, relation_type: selectedRelation });
             alert(`✅ Request Sent! Waiting for ${selectedMember.user.first_name} to accept.`);
-            setIsLinkModalOpen(false);
-            setSelectedMember(null);
-            setSelectedRelation('');
-            fetchMyData(); 
+            setIsLinkModalOpen(false); setSelectedMember(null); setSelectedRelation(''); fetchMyData(); 
         } catch (error: any) { alert(error.response?.data?.error || "❌ Failed to send request."); }
     };
 
     const handleRespondRequest = async (reqId: number, action: 'ACCEPT' | 'REJECT') => {
         try {
             await api.post('/samaj/profiles/respond_request/', { request_id: reqId, action: action });
-            alert(`✅ Request ${action}ED successfully!`);
-            fetchMyData(); 
+            alert(`✅ Request ${action}ED successfully!`); fetchMyData(); 
         } catch (error) { alert("❌ Something went wrong."); }
     };
 
@@ -110,8 +140,7 @@ export default function MyProfilePage() {
         if(!confirm("Are you sure you want to cancel this request?")) return;
         try {
             await api.post('/samaj/profiles/cancel_family_request/', { request_id: reqId });
-            alert(`✅ Request cancelled successfully!`);
-            fetchMyData(); 
+            alert(`✅ Request cancelled successfully!`); fetchMyData(); 
         } catch (error) { alert("❌ Failed to cancel request."); }
     };
 
@@ -130,11 +159,28 @@ export default function MyProfilePage() {
 
     if (isLoading) return <div className="p-6 max-w-3xl mx-auto space-y-6"><div className="h-40 bg-gray-200 rounded-3xl animate-pulse"></div><div className="h-64 bg-gray-200 rounded-3xl animate-pulse"></div></div>;
 
-    // 🌟 BUILD FULL FAMILY ARRAY (Core + Secondary)
+    if (!samajProfile) {
+        return (
+            <div className="p-6 max-w-3xl mx-auto mt-10">
+                <div className="bg-yellow-50 border border-yellow-200 p-8 rounded-3xl text-center">
+                    <AlertTriangle size={48} className="text-yellow-500 mx-auto mb-4" />
+                    <h2 className="text-2xl font-black text-gray-900 mb-2">No Samaj Profile Found</h2>
+                    <p className="text-gray-600 font-bold mb-6">
+                        You are logged in as <span className="text-blue-600">{authProfile?.username}</span> (Admin). 
+                        This account does not have a linked Samaj Profile.
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
     const familyMembers: any[] = [];
     if (samajProfile?.father && samajProfile.father.id) familyMembers.push({ type: 'Father', data: samajProfile.father });
     if (samajProfile?.mother && samajProfile.mother.id) familyMembers.push({ type: 'Mother', data: samajProfile.mother });
-    if (samajProfile?.spouse && samajProfile.spouse.id) familyMembers.push({ type: 'Spouse', data: samajProfile.spouse });
+    if (samajProfile?.spouse && samajProfile.spouse.id) {
+        const spouseType = samajProfile.spouse.gender === 'M' ? 'Husband' : 'Wife';
+        familyMembers.push({ type: spouseType, data: samajProfile.spouse });
+    }
     if (samajProfile?.children && Array.isArray(samajProfile.children)) {
         samajProfile.children.forEach((child: any) => {
             const relType = child.gender === 'M' ? 'Son' : 'Daughter';
@@ -149,7 +195,7 @@ export default function MyProfilePage() {
     }
 
     return (
-        <div className="p-4 md:p-6 max-w-5xl mx-auto font-sans relative">
+        <div className="p-4 md:p-6 max-w-5xl mx-auto font-sans relative pb-20">
             
             {/* LINK MODAL */}
             {isLinkModalOpen && (
@@ -214,20 +260,47 @@ export default function MyProfilePage() {
                 </div>
             )}
 
-            {/* EDIT PROFILE MODAL */}
+            {/* 🌟 EXTENDED EDIT PROFILE MODAL */}
             {isEditing && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                    <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-md shadow-2xl">
+                    <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">
                         <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-black text-gray-900">Edit Profile Details</h2>
+                            <h2 className="text-xl font-black text-gray-900">Update Profile Information</h2>
                             <button onClick={() => setIsEditing(false)} className="bg-gray-100 hover:bg-gray-200 p-2 rounded-full transition"><X size={20} className="text-gray-600" /></button>
                         </div>
-                        <form onSubmit={handleProfileUpdate} className="space-y-4">
-                            <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mobile Number</label><input type="text" value={editForm.mobile_no} onChange={e => setEditForm({...editForm, mobile_no: e.target.value})} className="w-full border border-gray-300 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"/></div>
-                            <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Village/City</label><input type="text" value={editForm.village_en} onChange={e => setEditForm({...editForm, village_en: e.target.value})} className="w-full border border-gray-300 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"/></div>
-                            <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Gotra</label><input type="text" value={editForm.gotra_en} onChange={e => setEditForm({...editForm, gotra_en: e.target.value})} className="w-full border border-gray-300 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"/></div>
-                            <button type="submit" disabled={isSaving} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-3 rounded-xl mt-4 transition shadow-md">{isSaving ? 'Saving...' : 'Save Changes'}</button>
-                        </form>
+                        <div className="overflow-y-auto pr-2 custom-scrollbar">
+                            <form onSubmit={handleProfileUpdate} className="space-y-6">
+                                
+                                {/* Block 1: Contact Info */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mobile Number</label><input type="text" value={editForm.mobile_no} onChange={e => setEditForm({...editForm, mobile_no: e.target.value})} className="w-full border border-gray-300 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"/></div>
+                                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email Address</label><input type="email" value={editForm.email} onChange={e => setEditForm({...editForm, email: e.target.value})} className="w-full border border-gray-300 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"/></div>
+                                </div>
+
+                                {/* Block 2: Origins & Demographics */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date of Birth</label><input type="date" value={editForm.dob} onChange={e => setEditForm({...editForm, dob: e.target.value})} className="w-full border border-gray-300 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-700"/></div>
+                                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Village/City</label><input type="text" value={editForm.village_en} onChange={e => setEditForm({...editForm, village_en: e.target.value})} className="w-full border border-gray-300 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"/></div>
+                                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Gotra</label><input type="text" value={editForm.gotra_en} onChange={e => setEditForm({...editForm, gotra_en: e.target.value})} className="w-full border border-gray-300 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"/></div>
+                                </div>
+
+                                {/* Block 3: Location & Career */}
+                                <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Current Address</label><textarea rows={2} value={editForm.address_1} onChange={e => setEditForm({...editForm, address_1: e.target.value})} className="w-full border border-gray-300 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium resize-none"></textarea></div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Highest Education</label><input type="text" placeholder="e.g. B.Tech, M.Com" value={editForm.education} onChange={e => setEditForm({...editForm, education: e.target.value})} className="w-full border border-gray-300 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"/></div>
+                                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Occupation / Profession</label><input type="text" placeholder="e.g. Software Engineer, Business" value={editForm.occupation_en} onChange={e => setEditForm({...editForm, occupation_en: e.target.value})} className="w-full border border-gray-300 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"/></div>
+                                </div>
+
+                                {/* Block 4: Password Change */}
+                                <div className="pt-4 border-t border-gray-200">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Change Password (Optional)</label>
+                                    <input type="password" placeholder="Leave blank to keep current password" value={editForm.new_password} onChange={e => setEditForm({...editForm, new_password: e.target.value})} className="w-full border border-gray-300 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"/>
+                                </div>
+
+                                <button type="submit" disabled={isSaving} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl mt-4 transition shadow-lg">{isSaving ? 'Saving...' : 'Save All Changes'}</button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             )}
@@ -248,7 +321,7 @@ export default function MyProfilePage() {
                             <div className="relative z-20 shrink-0" style={{ width: '140px', height: '140px' }}>
                                 <div className="w-full h-full rounded-full bg-blue-50 border-[6px] border-white shadow-xl flex items-center justify-center text-blue-600 font-black text-6xl overflow-hidden relative">
                                     <span className="absolute z-0">{authProfile?.first_name?.charAt(0) || 'U'}</span>
-                                    {samajProfile.profile_image && <img src={getImgUrl(samajProfile.profile_image)} alt="" className="absolute inset-0 w-full h-full object-cover z-10" onError={(e) => e.currentTarget.style.display = 'none'} />}
+                                    {samajProfile?.profile_image && <img src={getImgUrl(samajProfile.profile_image)} alt="" className="absolute inset-0 w-full h-full object-cover z-10" onError={(e) => e.currentTarget.style.display = 'none'} />}
                                 </div>
                                 <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-1 right-1 z-30 bg-blue-600 text-white p-3 rounded-full border-4 border-white hover:bg-blue-700 transition shadow-lg cursor-pointer flex items-center justify-center hover:scale-105">
                                     <Camera size={20} />
@@ -257,11 +330,11 @@ export default function MyProfilePage() {
                             
                             <div className="mb-2">
                                 <h1 className="text-3xl md:text-4xl font-black text-gray-900 leading-tight">{authProfile?.first_name} {authProfile?.last_name}</h1>
-                                <p className="text-gray-500 font-bold text-lg mt-1">{samajProfile.samaj_id}</p>
+                                <p className="text-gray-500 font-bold text-lg mt-1">{samajProfile?.samaj_id}</p>
                             </div>
                         </div>
                         
-                        {samajProfile.verification_status === 'VERIFIED' && (
+                        {samajProfile?.verification_status === 'VERIFIED' && (
                             <div className="bg-green-50 text-green-700 border border-green-200 px-4 py-2 rounded-full flex items-center gap-2 text-sm font-black uppercase tracking-wider shadow-sm mt-4 md:mt-0 self-start md:self-end shrink-0">
                                 <ShieldCheck size={18} /> Verified Member
                             </div>
@@ -270,25 +343,29 @@ export default function MyProfilePage() {
                 </div>
             </div>
 
-            {/* MIDDLE SECTION: BASIC INFO */}
+            {/* 🌟 MIDDLE SECTION: EXTENDED BASIC INFO */}
             <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 mb-8">
                 <h2 className="text-xl font-black text-gray-800 mb-6 border-b border-gray-100 pb-4">Personal Information</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                     <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
                         <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><MapPin size={14}/> Origin / Gotra</p>
-                        <p className="font-black text-gray-900 text-lg">{samajProfile.village_en || 'N/A'} {samajProfile.gotra_en ? `(${samajProfile.gotra_en})` : ''}</p>
+                        <p className="font-black text-gray-900 text-lg">{samajProfile?.village_en || 'N/A'} {samajProfile?.gotra_en ? `(${samajProfile.gotra_en})` : ''}</p>
                     </div>
                     <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
                         <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><Phone size={14}/> Mobile</p>
                         <p className="font-black text-gray-900 text-lg">{authProfile?.mobile_no || 'N/A'}</p>
                     </div>
                     <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
-                        <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><Mail size={14}/> Email</p>
-                        <p className="font-bold text-gray-700 text-lg truncate" title={authProfile?.email}>{authProfile?.email || 'N/A'}</p>
+                        <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><Users size={14}/> Gender & DOB</p>
+                        <p className="font-black text-gray-900 text-lg">{samajProfile?.gender === 'M' ? 'Male' : 'Female'} {samajProfile?.dob ? `• ${samajProfile.dob}` : ''}</p>
                     </div>
-                    <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
-                        <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><Users size={14}/> Gender</p>
-                        <p className="font-black text-gray-900 text-lg">{samajProfile.gender === 'M' ? 'Male' : 'Female'}</p>
+                    <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 lg:col-span-2">
+                        <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><Briefcase size={14}/> Profession & Education</p>
+                        <p className="font-black text-gray-900 text-lg">{samajProfile?.occupation_en || 'Not Added'} {samajProfile?.education ? `(${samajProfile.education})` : ''}</p>
+                    </div>
+                    <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 lg:col-span-3">
+                        <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><MapPin size={14}/> Current Address</p>
+                        <p className="font-bold text-gray-700 text-base">{samajProfile?.address_1 || 'No address provided.'}</p>
                     </div>
                 </div>
             </div>
@@ -299,8 +376,8 @@ export default function MyProfilePage() {
                     <h2 className="text-xl font-black text-gray-800 flex items-center gap-2"><Heart className="text-pink-500" size={24} /> Family Relationships</h2>
                     <button onClick={() => setIsLinkModalOpen(true)} className="bg-blue-100 text-blue-700 hover:bg-blue-200 font-black text-sm px-4 py-2 rounded-xl transition shadow-sm hidden sm:block">+ Add Relative</button>
                 </div>
-                
-                {/* PENDING REQUESTS TO ACCEPT */}
+
+                {/* PENDING REQUESTS */}
                 {pendingRequests.length > 0 && (
                     <div className="mb-6 border bg-yellow-50 border-yellow-300 shadow-md rounded-2xl p-4 md:p-6 transition-all">
                         <div className="flex items-center gap-2 font-black mb-4 text-sm text-yellow-800"><Clock size={18}/> Requests to Accept ({pendingRequests.length})</div>
@@ -321,30 +398,6 @@ export default function MyProfilePage() {
                                         <button onClick={() => handleRespondRequest(req.id, 'REJECT')} className="flex-1 sm:flex-none bg-gray-100 text-gray-600 hover:bg-gray-200 font-bold text-sm px-4 py-2 rounded-lg transition">Reject</button>
                                         <button onClick={() => handleRespondRequest(req.id, 'ACCEPT')} className="flex-1 sm:flex-none bg-green-600 text-white hover:bg-green-700 font-black text-sm px-4 py-2 rounded-lg transition shadow-md flex justify-center items-center gap-1"><CheckCircle size={16}/> Accept</button>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* SENT REQUESTS */}
-                {sentRequests.length > 0 && (
-                    <div className="mb-8 border rounded-2xl p-4 md:p-6 bg-blue-50 border-blue-200 shadow-sm">
-                        <div className="flex items-center gap-2 font-black mb-4 text-sm text-blue-800"><Send size={18}/> Sent Requests ({sentRequests.length})</div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                            {sentRequests.map(req => (
-                                <div key={req.id} className="bg-white p-3 rounded-xl shadow-sm border border-blue-100 flex justify-between items-center">
-                                    <div className="flex items-center gap-3">
-                                        <div className="relative w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-600 text-xs overflow-hidden shrink-0">
-                                            <span className="absolute z-0">{req.receiver_name[0] || 'U'}</span>
-                                            {req.receiver_image && <img src={getImgUrl(req.receiver_image)} className="absolute inset-0 w-full h-full object-cover z-10" onError={(e) => e.currentTarget.style.display = 'none'} alt=""/>}
-                                        </div>
-                                        <div className="leading-tight">
-                                            <p className="font-bold text-gray-900 text-xs">{req.receiver_name}</p>
-                                            <p className="text-[9px] font-bold text-gray-500 uppercase">Pending as <span className="text-blue-600">{req.relation_type}</span></p>
-                                        </div>
-                                    </div>
-                                    <button onClick={() => handleCancelRequest(req.id)} className="font-black text-red-600 bg-red-50 hover:bg-red-600 hover:text-white px-2.5 py-1.5 rounded-lg transition border border-red-100 flex items-center gap-1 text-[10px]"><Trash2 size={12}/> Cancel</button>
                                 </div>
                             ))}
                         </div>
@@ -374,20 +427,11 @@ export default function MyProfilePage() {
                                     </div>
                                     <div className="text-blue-400 group-hover:text-blue-600 font-black">→</div>
                                 </div>
-                                <div className="pt-3 border-t border-blue-100/50 flex flex-col gap-1 text-xs font-bold text-gray-600">
-                                    <span className="flex items-center gap-1"><UserCheck size={12} className="text-blue-400"/> ID: {fam.data.samaj_id}</span>
-                                    {fam.data.village_en && <span className="flex items-center gap-1"><MapPin size={12} className="text-red-400"/> {fam.data.village_en}</span>}
-                                </div>
                             </Link>
                         ))}
-                        
-                        <div className="sm:hidden w-full">
-                            <button onClick={() => setIsLinkModalOpen(true)} className="w-full bg-white border-2 border-blue-100 text-blue-600 hover:bg-blue-50 font-black text-sm px-6 py-4 rounded-xl transition shadow-sm">+ Add More Relatives</button>
-                        </div>
                     </div>
                 )}
             </div>
-
         </div>
     );
 }

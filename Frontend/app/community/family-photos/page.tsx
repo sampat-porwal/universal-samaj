@@ -38,7 +38,13 @@ export default function FamilyPhotoManagerPage() {
                 // Add Core Family
                 if (myProfile.father && myProfile.father.id) members.push({ type: 'Father', data: myProfile.father });
                 if (myProfile.mother && myProfile.mother.id) members.push({ type: 'Mother', data: myProfile.mother });
-                if (myProfile.spouse && myProfile.spouse.id) members.push({ type: 'Spouse', data: myProfile.spouse });
+                if (myProfile.spouse && myProfile.spouse.id) {
+                        const spouseType = myProfile.spouse.gender === 'M' ? 'Husband' : 'Wife';
+                        members.push({ type: spouseType, data: myProfile.spouse });
+                    }
+
+                // if (myProfile.spouse && myProfile.spouse.id) members.push({ type: 'Spouse', data: myProfile.spouse });
+
                 if (myProfile.children && Array.isArray(myProfile.children)) {
                     myProfile.children.forEach((child: any) => {
                         const relType = child.gender === 'M' ? 'Son' : 'Daughter';

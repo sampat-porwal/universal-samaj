@@ -2,8 +2,9 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db import transaction # 🌟 REQUIRED FOR SAFE BULK UPLOAD
+from django.db import transaction
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ObjectDoesNotExist
 from .models import SamajProfile, VerificationVote, FamilyLinkRequest
 from .serializers import SamajProfileSerializer
 
@@ -47,8 +48,31 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
         
         return Response({"message": f"Vote cast successfully! ({current_votes}/5 votes collected)", "current_votes": current_votes, "status": current_status}, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def pending_requests(self, request):
+        if not hasattr(request.user, 'samaj_profile'):
+            return Response([], status=status.HTTP_200_OK)
+            
+        profile = request.user.samaj_profile
+        reqs = FamilyLinkRequest.objects.filter(receiver=profile, status='PENDING').order_by('-created_at')
+        data = [{"id": r.id, "sender_name": f"{r.sender.user.first_name} {r.sender.user.last_name}".strip(), "sender_image": r.sender.profile_image.url if r.sender.profile_image else None, "relation_type": r.relation_type, "created_at": r.created_at} for r in reqs]
+        return Response(data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def sent_requests(self, request):
+        if not hasattr(request.user, 'samaj_profile'):
+            return Response([], status=status.HTTP_200_OK)
+
+        profile = request.user.samaj_profile
+        reqs = FamilyLinkRequest.objects.filter(sender=profile, status='PENDING').order_by('-created_at')
+        data = [{"id": r.id, "receiver_name": f"{r.receiver.user.first_name} {r.receiver.user.last_name}".strip(), "receiver_image": r.receiver.profile_image.url if r.receiver.profile_image else None, "relation_type": r.relation_type, "created_at": r.created_at} for r in reqs]
+        return Response(data, status=status.HTTP_200_OK)
+
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def send_family_request(self, request):
+        if not hasattr(request.user, 'samaj_profile'):
+            return Response({"error": "You must have a Samaj Profile to send requests."}, status=status.HTTP_400_BAD_REQUEST)
+            
         sender = request.user.samaj_profile
         receiver_id = request.data.get('receiver_id')
         relation_type = request.data.get('relation_type')
@@ -61,22 +85,11 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
-    def pending_requests(self, request):
-        profile = request.user.samaj_profile
-        reqs = FamilyLinkRequest.objects.filter(receiver=profile, status='PENDING').order_by('-created_at')
-        data = [{"id": r.id, "sender_name": f"{r.sender.user.first_name} {r.sender.user.last_name}".strip(), "sender_image": r.sender.profile_image.url if r.sender.profile_image else None, "relation_type": r.relation_type, "created_at": r.created_at} for r in reqs]
-        return Response(data, status=status.HTTP_200_OK)
-
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
-    def sent_requests(self, request):
-        profile = request.user.samaj_profile
-        reqs = FamilyLinkRequest.objects.filter(sender=profile, status='PENDING').order_by('-created_at')
-        data = [{"id": r.id, "receiver_name": f"{r.receiver.user.first_name} {r.receiver.user.last_name}".strip(), "receiver_image": r.receiver.profile_image.url if r.receiver.profile_image else None, "relation_type": r.relation_type, "created_at": r.created_at} for r in reqs]
-        return Response(data, status=status.HTTP_200_OK)
-
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def cancel_family_request(self, request):
+        if not hasattr(request.user, 'samaj_profile'):
+            return Response({"error": "Profile not found."}, status=status.HTTP_400_BAD_REQUEST)
+            
         req_id = request.data.get('request_id')
         try:
             link_req = FamilyLinkRequest.objects.get(id=req_id, sender=request.user.samaj_profile, status='PENDING')
@@ -87,6 +100,9 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def respond_request(self, request):
+        if not hasattr(request.user, 'samaj_profile'):
+            return Response({"error": "Profile not found."}, status=status.HTTP_400_BAD_REQUEST)
+
         req_id = request.data.get('request_id')
         action = request.data.get('action') 
         try:
@@ -113,22 +129,75 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({"error": "Failed to process request."}, status=status.HTTP_400_BAD_REQUEST)
 
+    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
+    def update_family_photo(self, request, pk=None):
+        target_profile = self.get_object()
+        
+        is_allowed = False
+        if request.user.is_superuser:
+            is_allowed = True
+        elif hasattr(request.user, 'samaj_profile'):
+            user_profile = request.user.samaj_profile
+            if user_profile.is_core_member:
+                is_allowed = True
+            elif target_profile.id == user_profile.id:
+                is_allowed = True
+            elif target_profile in [user_profile.father, user_profile.mother, user_profile.spouse]:
+                is_allowed = True
+            elif user_profile in [target_profile.father, target_profile.mother]:
+                is_allowed = True
+
+        if not is_allowed:
+            return Response({"error": "You don't have permission to update this member's photo."}, status=status.HTTP_403_FORBIDDEN)
+
+        if 'profile_image' in request.FILES:
+            target_profile.profile_image = request.FILES['profile_image']
+            target_profile.save(update_fields=['profile_image'])
+            return Response({"message": "Photo updated successfully!", "profile_image": target_profile.profile_image.url}, status=status.HTTP_200_OK)
+        else:
+            return Response({"error": "No image provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # ==========================================
+    # 🌟 NEW: TOGGLE CORE MEMBER STATUS
+    # ==========================================
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def toggle_core_member(self, request, pk=None):
+        target_profile = self.get_object()
+
+        # 1. Check Authorization: Only Superadmin, ERP Admin, or Existing Core Member can do this
+        is_authorized = False
+        if request.user.is_superuser or request.user.role == 'ADMIN':
+            is_authorized = True
+        elif hasattr(request.user, 'samaj_profile') and request.user.samaj_profile.is_core_member:
+            is_authorized = True
+
+        if not is_authorized:
+            return Response({"error": "Only Admins or existing Core Members can promote others."}, status=status.HTTP_403_FORBIDDEN)
+
+        # 2. Prevent self-demotion accidentally
+        if hasattr(request.user, 'samaj_profile') and target_profile.id == request.user.samaj_profile.id:
+            return Response({"error": "You cannot change your own Core Member status."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 3. Toggle the status
+        target_profile.is_core_member = not target_profile.is_core_member
+        target_profile.save(update_fields=['is_core_member'])
+
+        status_msg = "PROMOTED TO" if target_profile.is_core_member else "REMOVED FROM"
+        return Response({
+            "message": f"Successfully {status_msg} Core Member status!", 
+            "is_core_member": target_profile.is_core_member
+        }, status=status.HTTP_200_OK)
+
     # ==========================================
     # 🌟 SUPER API: EXTENDABLE BULK FAMILY IMPORT
     # ==========================================
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def bulk_family_import(self, request):
-        # 1. 🌟 FIX: Allow Superuser OR Core Member
         is_authorized = False
         if request.user.is_superuser:
             is_authorized = True
-        else:
-            try:
-                voter_profile = SamajProfile.objects.get(user=request.user)
-                if voter_profile.is_core_member:
-                    is_authorized = True
-            except SamajProfile.DoesNotExist:
-                pass
+        elif hasattr(request.user, 'samaj_profile') and request.user.samaj_profile.is_core_member:
+            is_authorized = True
 
         if not is_authorized:
             return Response({"error": "Access Denied: Only Admins or Core Members can upload bulk data."}, status=status.HTTP_403_FORBIDDEN)
@@ -148,8 +217,7 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
 
         try:
             with transaction.atomic():
-                
-                # --- 1. HANDLE MASTER USER (NEW OR EXISTING) ---
+                # 1. CREATE OR FETCH HEAD
                 if head_data.get('is_existing') and head_data.get('existing_username'):
                     try:
                         head_user = User.objects.get(username=head_data['existing_username'])
@@ -178,7 +246,7 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
                     )
                     created_profiles.append(f"New Master Created: {head_user.first_name} (User ID: {head_user.username})")
 
-                # --- 2. CREATE MEMBERS & SET RELATIONS ---
+                # 2. CREATE MEMBERS AND SET DIRECT RELATIONS
                 for mem in members_data:
                     m_username = generate_username(mem.get('first_name'), mem.get('mobile_no'))
                     m_user = User.objects.create_user(
@@ -217,6 +285,36 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
                 
                 head_profile.save()
 
+                # =======================================================
+                # 🌟 UPGRADED SMART AUTO-RELATION ALGORITHM 🌟
+                # =======================================================
+                # DB se wapas bulaya taaki memory ki galti na ho!
+                actual_head = SamajProfile.objects.get(id=head_profile.id)
+
+                # RULE 1: Direct SQL update to assign Spouse to Children
+                if actual_head.spouse:
+                    if actual_head.gender == 'M': 
+                        # Head is Father, Spouse is Mother (Auto-assign Mother to all kids)
+                        SamajProfile.objects.filter(father=actual_head, mother__isnull=True).update(mother=actual_head.spouse)
+                    elif actual_head.gender == 'F': 
+                        # Head is Mother, Spouse is Father (Auto-assign Father to all kids)
+                        SamajProfile.objects.filter(mother=actual_head, father__isnull=True).update(father=actual_head.spouse)
+                            
+                # RULE 2: Bind Parents to each other (If someone adds both Father and Mother)
+                if actual_head.father and actual_head.mother:
+                    if not actual_head.father.spouse:
+                        actual_head.father.spouse = actual_head.mother
+                        actual_head.father.save(update_fields=['spouse'])
+                    if not actual_head.mother.spouse:
+                        actual_head.mother.spouse = actual_head.father
+                        actual_head.mother.save(update_fields=['spouse'])
+                        
+                # RULE 3: Ensure Bidirectional Spouse for safety
+                if actual_head.spouse:
+                    if not actual_head.spouse.spouse:
+                        actual_head.spouse.spouse = actual_head
+                        actual_head.spouse.save(update_fields=['spouse'])
+
             return Response({
                 "message": "Family Bulk Import Successful!", 
                 "imported_users": created_profiles
@@ -224,44 +322,3 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
 
         except Exception as e:
             return Response({"error": f"Import failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-
-
-# IMPORT THIS AT THE TOP IF NOT PRESENT
-    # from django.db.models import Q
-
-    # ==========================================
-    # 🌟 NEW: UPDATE FAMILY MEMBER PHOTO API
-    # ==========================================
-    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
-    def update_family_photo(self, request, pk=None):
-        target_profile = self.get_object()
-        user_profile = request.user.samaj_profile
-
-        # 1. Permission Check: Can this user update this target's photo?
-        is_allowed = False
-        
-        # Superadmin / Core Member case
-        if request.user.is_superuser or user_profile.is_core_member:
-            is_allowed = True
-            
-        # Self Update Case
-        elif target_profile.id == user_profile.id:
-            is_allowed = True
-            
-        # Core Family Case (Father, Mother, Spouse, Children)
-        elif target_profile in [user_profile.father, user_profile.mother, user_profile.spouse]:
-            is_allowed = True
-        elif user_profile in [target_profile.father, target_profile.mother]: # Target is my child
-            is_allowed = True
-
-        if not is_allowed:
-            return Response({"error": "You don't have permission to update this member's photo."}, status=status.HTTP_403_FORBIDDEN)
-
-        # 2. Update the Photo
-        if 'profile_image' in request.FILES:
-            target_profile.profile_image = request.FILES['profile_image']
-            target_profile.save(update_fields=['profile_image'])
-            return Response({"message": "Photo updated successfully!", "profile_image": target_profile.profile_image.url}, status=status.HTTP_200_OK)
-        else:
-            return Response({"error": "No image provided."}, status=status.HTTP_400_BAD_REQUEST)

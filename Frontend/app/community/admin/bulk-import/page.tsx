@@ -12,35 +12,78 @@ export default function BulkImportPage() {
     const [successMessage, setSuccessMessage] = useState<string[]>([]);
 
     useEffect(() => {
+        // Fetching auth profile (Works for Superadmin even without SamajProfile)
         api.get('/auth/profile/').then(res => setAuthProfile(res.data)).catch(err => console.error(err));
     }, []);
 
-    // 🌟 TEMPLATE 1: START NEW FAMILY
+    // 🌟 TEMPLATE 1: START NEW FAMILY (WITH EMAIL ADDED)
     const loadNewFamilyTemplate = () => {
         const template = {
             head_of_family: {
                 is_existing: false,
-                first_name: "Ramesh", last_name: "Suwalka", mobile_no: "9876543210", gender: "M", village_en: "Dhundra", gotra_en: "Godash"
+                first_name: "Ramesh", 
+                last_name: "Suwalka", 
+                mobile_no: "9876543210", 
+                email: "ramesh@example.com", // 🌟 Email added
+                gender: "M", 
+                village_en: "Dhundra", 
+                gotra_en: "Godash"
             },
             members: [
-                { relation_to_head: "WIFE", first_name: "Sunita", last_name: "Suwalka", mobile_no: "", gender: "F", village_en: "Dhundra", gotra_en: "Anchera" },
-                { relation_to_head: "SON", first_name: "Rahul", last_name: "Suwalka", mobile_no: "", gender: "M", village_en: "Dhundra", gotra_en: "Godash" }
+                { 
+                    relation_to_head: "WIFE", 
+                    first_name: "Sunita", 
+                    last_name: "Suwalka", 
+                    mobile_no: "9876543211", 
+                    email: "sunita@example.com", // 🌟 Email added
+                    gender: "F", 
+                    village_en: "Dhundra", 
+                    gotra_en: "Anchera" 
+                },
+                { 
+                    relation_to_head: "SON", 
+                    first_name: "Rahul", 
+                    last_name: "Suwalka", 
+                    mobile_no: "9876543212", 
+                    email: "rahul@example.com", // 🌟 Email added
+                    gender: "M", 
+                    village_en: "Dhundra", 
+                    gotra_en: "Godash" 
+                }
             ]
         };
         setJsonInput(JSON.stringify(template, null, 2));
         resetStates();
     };
 
-    // 🌟 TEMPLATE 2: EXTEND EXISTING MEMBER
+    // 🌟 TEMPLATE 2: EXTEND EXISTING MEMBER (WITH EMAIL ADDED)
     const loadExistingMemberTemplate = () => {
         const template = {
             head_of_family: {
                 is_existing: true,
-                existing_username: "rahul3210", // 👈 Type the user ID you want to extend here!
+                existing_username: "skpsupper", // 👈 Type the user ID you want to extend here!
             },
             members: [
-                { relation_to_head: "WIFE", first_name: "Priya", last_name: "Suwalka", mobile_no: "", gender: "F", village_en: "Dhundra", gotra_en: "Rathore" },
-                { relation_to_head: "SON", first_name: "Aarav", last_name: "Suwalka", mobile_no: "", gender: "M", village_en: "Dhundra", gotra_en: "Godash" }
+                { 
+                    relation_to_head: "WIFE", 
+                    first_name: "Uma", 
+                    last_name: "Suwalka", 
+                    mobile_no: "", 
+                    email: "uma@example.com", // 🌟 Email added
+                    gender: "F", 
+                    village_en: "Bhilwara", 
+                    gotra_en: "Rathore" 
+                },
+                { 
+                    relation_to_head: "SON", 
+                    first_name: "Aarav", 
+                    last_name: "Suwalka", 
+                    mobile_no: "", 
+                    email: "", // Leave blank if not available
+                    gender: "M", 
+                    village_en: "Bhilwara", 
+                    gotra_en: "Godash" 
+                }
             ]
         };
         setJsonInput(JSON.stringify(template, null, 2));
@@ -74,7 +117,7 @@ export default function BulkImportPage() {
             setJsonInput('');
             setParsedData(null);
         } catch (err: any) {
-            setError(err.response?.data?.error || "Server Error. Are you a Core Member?");
+            setError(err.response?.data?.error || "Server Error. Are you an Admin or Core Member?");
         } finally {
             setIsSubmitting(false);
         }
@@ -87,11 +130,11 @@ export default function BulkImportPage() {
                     <h1 className="text-3xl font-black text-gray-900 flex items-center gap-3">
                         <UploadCloud className="text-blue-600" size={32}/> Bulk Family Onboarding
                     </h1>
-                    <p className="text-gray-500 font-bold mt-2">Paste properly formatted JSON to create auto-verified family networks instantly.</p>
+                    <p className="text-gray-500 font-bold mt-2">Superadmin / Core Member Access: Auto-verify and connect families via JSON.</p>
                 </div>
                 {authProfile && (
                     <p className="text-sm font-bold text-gray-400 bg-gray-100 px-4 py-2 rounded-xl">
-                        Operating as: <span className="text-blue-600">{authProfile.first_name}</span>
+                        Operating as: <span className="text-blue-600 font-black">{authProfile.username} (Admin)</span>
                     </p>
                 )}
             </div>
@@ -140,7 +183,7 @@ export default function BulkImportPage() {
                                 <CheckCircle size={24}/> Network Created!
                             </div>
                             <p className="text-xs font-bold text-green-600 mb-4 bg-white p-2 rounded-lg border border-green-100">
-                                Save these "User IDs" to use them as Masters in the next step.
+                                User IDs automatically generated for login and future links:
                             </p>
                             <ul className="space-y-2">
                                 {successMessage.map((msg, i) => (
@@ -165,7 +208,7 @@ export default function BulkImportPage() {
                                 ) : (
                                     <>
                                         <h3 className="font-black text-xl text-gray-900">{parsedData.head_of_family.first_name} {parsedData.head_of_family.last_name}</h3>
-                                        <p className="text-sm font-bold text-gray-500 mt-1">Mobile: {parsedData.head_of_family.mobile_no || 'N/A'} • {parsedData.head_of_family.village_en}</p>
+                                        <p className="text-sm font-bold text-gray-500 mt-1">Mobile: {parsedData.head_of_family.mobile_no || 'N/A'} • Email: {parsedData.head_of_family.email || 'N/A'}</p>
                                     </>
                                 )}
                             </div>
@@ -177,7 +220,7 @@ export default function BulkImportPage() {
                                         <div className="absolute -left-[25px] top-1/2 w-6 border-t-2 border-blue-100"></div>
                                         <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">{mem.relation_to_head}</p>
                                         <h4 className="font-black text-gray-900">{mem.first_name} {mem.last_name}</h4>
-                                        <p className="text-xs font-bold text-gray-500">{mem.gender === 'M' ? 'Male' : 'Female'} • {mem.village_en}</p>
+                                        <p className="text-xs font-bold text-gray-500">{mem.gender === 'M' ? 'Male' : 'Female'} • Email: {mem.email || 'N/A'}</p>
                                     </div>
                                 ))}
                             </div>

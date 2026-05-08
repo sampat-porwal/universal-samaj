@@ -22,11 +22,14 @@ class CustomRole(models.Model):
 # 2. UNIVERSAL USER MODEL (Core Identity)
 # ==========================================
 class CustomUser(AbstractUser):
+    # 🌟 UPDATED: Extended Roles for Samaj Portal
     ROLE_CHOICES = (
-        ('SUPERADMIN', 'System Owner'),
-        ('ADMIN', 'Admin / Manager'),
-        ('STAFF', 'Staff / Employee'),
-        ('USER', 'Standard User / Member'),
+        ('SUPERADMIN', 'System Owner (IT Admin)'),      # Not a Samaj Member, full system access
+        ('CORE_ADMIN', 'Core Admin (Samaj Leader)'),    # Can promote Core Members & Bulk Import
+        ('CORE_MEMBER', 'Core Member (Verifier)'),      # Can verify & Bulk Import
+        ('EVENT_ADMIN', 'Event Manager'),               # Future: Manage events
+        ('USER', 'Standard User'),                      # Normal Samaj Member
+        ('STAFF', 'ERP Staff'),                         # For your existing ERP software
     )
     
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='USER')
@@ -127,8 +130,15 @@ class SamajProfile(SamajBaseModel):
     is_alive = models.BooleanField(default=True)
     verification_status = models.CharField(max_length=20, choices=(('PENDING', 'Pending'), ('VERIFIED', 'Verified'), ('REJECTED', 'Rejected')), default='PENDING')
     
-    # 🌟 NEW: Core Member flag for Social Network style verification
+    # Existing core member flag
     is_core_member = models.BooleanField(default=False, help_text="Can verify other pending members")
+
+    # 🌟 NEW: TRACK BULK VS SELF IMPORT
+    REG_SOURCE_CHOICES = (
+        ('SELF', 'Self Registered'),
+        ('BULK', 'Bulk Import by Admin'),
+    )
+    registration_source = models.CharField(max_length=10, choices=REG_SOURCE_CHOICES, default='SELF')
 
     # Relationship Caching (Hindi & English both stored here for Next.js speed)
     family_summary = models.JSONField(default=dict, blank=True)
@@ -201,7 +211,7 @@ class ActivityRegistration(SamajBaseModel):
 
 
 # ==========================================
-# 8. NEW: VERIFICATION QUORUM (The 5-Vote System)
+# 8. VERIFICATION QUORUM (The 5-Vote System)
 # ==========================================
 class VerificationVote(SamajBaseModel):
     """Tracks which Core Member verified which Pending Profile"""
@@ -218,8 +228,7 @@ class VerificationVote(SamajBaseModel):
         return f"{self.core_member.username} verified {self.pending_profile.samaj_id}"
     
 
-
-    # ==========================================
+# ==========================================
 # 9. FAMILY RELATIONSHIP REQUESTS (The Social Graph)
 # ==========================================
 class FamilyLinkRequest(SamajBaseModel):
@@ -251,5 +260,3 @@ class FamilyLinkRequest(SamajBaseModel):
 
     def __str__(self):
         return f"{self.sender.user.first_name} requested {self.receiver.user.first_name} as {self.relation_type} ({self.status})"
-    
-
