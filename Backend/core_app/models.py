@@ -22,13 +22,15 @@ class CustomRole(models.Model):
 # 2. UNIVERSAL USER MODEL (Core Identity)
 # ==========================================
 class CustomUser(AbstractUser):
-    # 🌟 UPDATED: Extended Roles for Samaj Portal
+    # 🌟 UPDATED: PERFECT 7-LEVEL ARCHITECTURE ROLES + ERP STAFF
     ROLE_CHOICES = (
-        ('SUPERADMIN', 'System Owner (IT Admin)'),      # Not a Samaj Member, full system access
+        ('SUPERADMIN', 'System Owner (IT Admin)'),      # Access All
+        ('ADMIN', 'Admin'),                             # Access all except create admin
         ('CORE_ADMIN', 'Core Admin (Samaj Leader)'),    # Can promote Core Members & Bulk Import
         ('CORE_MEMBER', 'Core Member (Verifier)'),      # Can verify & Bulk Import
-        ('EVENT_ADMIN', 'Event Manager'),               # Future: Manage events
-        ('USER', 'Standard User'),                      # Normal Samaj Member
+        ('EVENT_ADMIN', 'Event Admin'),                 # Manage events
+        ('EVENT_USER', 'Event User'),                   # Ground level event worker
+        ('USER', 'Simple User'),                        # Normal Samaj Member
         ('STAFF', 'ERP Staff'),                         # For your existing ERP software
     )
     
@@ -146,7 +148,9 @@ class SamajProfile(SamajBaseModel):
     # Recursive Family Tree
     father = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='child_f')
     mother = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='child_m')
-    spouse = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='partner')
+    
+    # 🌟 UPGRADED: Changed from ForeignKey to ManyToManyField to handle multiple spouses (0.001% edge case)
+    spouses = models.ManyToManyField('self', blank=True)
 
     def __str__(self):
         return f"{self.user.first_name} - {self.samaj_id}"

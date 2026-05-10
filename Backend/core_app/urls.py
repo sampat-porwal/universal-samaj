@@ -21,6 +21,8 @@ from .samaj_profile_views import SamajProfileViewSet
 from .samaj_media_views import FamilyAlbumViewSet
 from .samaj_committee_views import SamajCommitteeViewSet
 
+from .tree_views import SamajFamilyTreeView
+
 # 🌟 NEW: CREATE ROUTER FOR SAMAJ VIEWSETS
 router = DefaultRouter()
 router.register(r'profiles', SamajProfileViewSet, basename='samaj-profile')
@@ -57,6 +59,9 @@ urlpatterns = [
 
     # 🏛️ SAMAJ ADVANCED MODULES (Grouped neatly under /samaj/...)
     path('samaj/', include(router.urls)),
+
+    # Under the urlpatterns list add:
+    path('samaj/tree/<int:profile_id>/', SamajFamilyTreeView.as_view(), name='api-family-tree'),
 ]
 
 

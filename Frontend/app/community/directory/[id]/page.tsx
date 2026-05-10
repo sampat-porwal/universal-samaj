@@ -1,8 +1,8 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { MapPin, Phone, ShieldCheck, Heart, ArrowLeft, Users, UserCheck, Star } from 'lucide-react';
+import { MapPin, Phone, ShieldCheck, Heart, ArrowLeft, Users, UserCheck, Star, Camera, Settings, X, CheckCircle } from 'lucide-react';
 import api from '@/lib/api';
 
 export default function PublicProfilePage() {
@@ -11,59 +11,55 @@ export default function PublicProfilePage() {
     const [profile, setProfile] = useState<any>(null);
     const [loggedInUser, setLoggedInUser] = useState<any>(null); 
     const [isLoading, setIsLoading] = useState(true);
+    const [isNotFound, setIsNotFound] = useState(false);
+    
+    // 🌟 State for Role Management Modal
+    const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
+    const [selectedRole, setSelectedRole] = useState('USER');
     const [isUpdatingRole, setIsUpdatingRole] = useState(false);
-    const [isNotFound, setIsNotFound] = useState(false); // 🌟 Handle 404 safely
+    
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const profileId = params.id;
 
     useEffect(() => {
-        const fetchDetails = async () => {
-            try {
-                // 1. Get Logged In User's Info
-                const authRes = await api.get('/auth/profile/');
-                
-                let isViewerCore = false;
-                try {
-                    const samajRes = await api.get('/samaj/profiles/');
-                    const mySamajProfile = samajRes.data.find((p: any) => p.user.username === authRes.data.username);
-                    if (mySamajProfile?.is_core_member) isViewerCore = true;
-                } catch(e) {}
-
-                setLoggedInUser({
-                    ...authRes.data,
-                    is_core_member: isViewerCore
-                });
-
-                // 2. Get The Target Profile's Data
-                const res = await api.get(`/samaj/profiles/${profileId}/`);
-                setProfile(res.data);
-                setIsNotFound(false);
-
-            } catch (error: any) {
-                console.error("Failed to load details", error);
-                if (error.response && error.response.status === 404) {
-                    setIsNotFound(true); // Safely handle 404 error
-                }
-            } finally {
-                setIsLoading(false);
-            }
-        };
         fetchDetails();
     }, [profileId]);
+
+    const fetchDetails = async () => {
+        try {
+            const authRes = await api.get('/auth/profile/');
+            setLoggedInUser(authRes.data);
+
+            const res = await api.get(`/samaj/profiles/${profileId}/`);
+            setProfile(res.data);
+            setIsNotFound(false);
+
+        } catch (error: any) {
+            console.error("Failed to load details", error);
+            if (error.response && error.response.status === 404) {
+                setIsNotFound(true); 
+            }
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const getImgUrl = (path: string) => {
         if (!path) return '';
         return path.startsWith('http') ? path : `http://127.0.0.1:8000${path}`;
     };
 
-    const handleToggleCoreMember = async () => {
-        if (!confirm(`Are you sure you want to change Core Member status for ${profile.user?.first_name}?`)) return;
+    // 🌟 Assign Role Logic
+    const handleAssignRole = async () => {
+        if (!confirm(`Are you sure you want to assign ${selectedRole.replace('_', ' ')} role to ${profile.user?.first_name}?`)) return;
         
         setIsUpdatingRole(true);
         try {
-            const res = await api.post(`/samaj/profiles/${profileId}/toggle_core_member/`);
+            const res = await api.post(`/samaj/profiles/${profileId}/assign_role/`, { role: selectedRole });
             alert(res.data.message);
             setProfile({ ...profile, is_core_member: res.data.is_core_member });
+            setIsRoleModalOpen(false);
         } catch (error: any) {
             alert(error.response?.data?.error || "Failed to update role.");
         } finally {
@@ -71,9 +67,22 @@ export default function PublicProfilePage() {
         }
     };
 
+    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !profile) return;
+        const formData = new FormData();
+        formData.append('profile_image', file);
+        try {
+            await api.patch(`/samaj/profiles/${profile.id}/update_family_photo/`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+            alert("✅ Member's photo updated successfully!");
+            fetchDetails(); 
+        } catch (error) { 
+            alert("❌ Failed to upload photo."); 
+        }
+    };
+
     if (isLoading) return <div className="p-10 text-center font-bold text-gray-500 animate-pulse">Loading Member Details...</div>;
     
-    // 🌟 Safe Fallback for Deleted/Missing Profiles
     if (isNotFound || !profile) return (
         <div className="p-10 text-center flex flex-col items-center">
             <p className="font-black text-red-500 text-2xl mb-4">Profile Not Found!</p>
@@ -83,18 +92,17 @@ export default function PublicProfilePage() {
         </div>
     );
 
-    const canPromote = loggedInUser?.role === 'SUPERADMIN' || loggedInUser?.role === 'ADMIN' || loggedInUser?.is_core_member;
     const isSelf = loggedInUser?.username === profile.user?.username;
+    
+    // 🌟 STRICT ROLE CONDITIONS: Added CORE_ADMIN here
+    const canManageRole = ['SUPERADMIN', 'ADMIN', 'CORE_ADMIN'].includes(loggedInUser?.role);
+    const canSuperEditPhoto = ['SUPERADMIN', 'ADMIN', 'CORE_ADMIN'].includes(loggedInUser?.role);
 
-    // ==========================================
-    // 🌟 BUILD FAMILY ARRAY & GENDER LOGIC
-    // ==========================================
     let familyMembers: any[] = [];
     
     if (profile.father && profile.father.id) familyMembers.push({ type: 'Father', data: profile.father });
     if (profile.mother && profile.mother.id) familyMembers.push({ type: 'Mother', data: profile.mother });
     
-    // 🌟 1. FIX: Changed "Spouse" to "Wife/Husband" based on gender
     if (profile.spouse && profile.spouse.id) {
         const spouseType = profile.spouse.gender === 'M' ? 'Husband' : 'Wife';
         familyMembers.push({ type: spouseType, data: profile.spouse });
@@ -114,45 +122,75 @@ export default function PublicProfilePage() {
         });
     }
 
-    // ==========================================
-    // 🌟 2. FIX: SMART AGE-WISE SORTING ALGORITHM
-    // ==========================================
     familyMembers.sort((a, b) => {
         const priorityOrder: any = { 'Father': 1, 'Mother': 2, 'Husband': 3, 'Wife': 3 };
-        
         const priorityA = priorityOrder[a.type] || 99;
         const priorityB = priorityOrder[b.type] || 99;
-        
-        if (priorityA !== priorityB) {
-            return priorityA - priorityB;
-        }
+        if (priorityA !== priorityB) return priorityA - priorityB;
 
         const dobA = a.data.dob ? new Date(a.data.dob).getTime() : Infinity;
         const dobB = b.data.dob ? new Date(b.data.dob).getTime() : Infinity;
-        
-        // Elder (smaller date value) comes first
         return dobA - dobB; 
     });
 
     return (
         <div className="p-4 md:p-6 max-w-5xl mx-auto font-sans relative">
+            
+            {/* 🌟 ROLE MANAGEMENT MODAL */}
+            {isRoleModalOpen && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-md shadow-2xl">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-black text-gray-900 flex items-center gap-2"><Settings size={20} className="text-blue-600"/> Manage User Role</h2>
+                            <button onClick={() => setIsRoleModalOpen(false)} className="bg-gray-100 hover:bg-gray-200 p-2 rounded-full transition"><X size={20} className="text-gray-600" /></button>
+                        </div>
+                        <div className="space-y-4">
+                            <p className="text-sm font-bold text-gray-500">Assigning role for <span className="text-gray-900">{profile.user?.first_name}</span>.</p>
+                            
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Select Community Level</label>
+                                <select value={selectedRole} onChange={e => setSelectedRole(e.target.value)} className="w-full border-2 border-gray-200 p-4 rounded-xl font-bold bg-gray-50 outline-none focus:border-blue-500">
+                                    <option value="USER">Standard User (Default)</option>
+                                    <option value="EVENT_USER">Event User (Volunteer)</option>
+                                    <option value="CORE_MEMBER">Core Member (Verifier)</option>
+                                    
+                                    {/* 🌟 Admin and Superadmin Options */}
+                                    {['SUPERADMIN', 'ADMIN'].includes(loggedInUser?.role) && (
+                                        <>
+                                            <option value="EVENT_ADMIN">Event Admin (Manager)</option>
+                                            <option value="CORE_ADMIN">Core Admin (Samaj Leader)</option>
+                                        </>
+                                    )}
+                                    
+                                    {/* 🌟 Only Superadmin can make another Admin */}
+                                    {loggedInUser?.role === 'SUPERADMIN' && (
+                                        <option value="ADMIN">System Admin</option>
+                                    )}
+                                </select>
+                            </div>
+
+                            <button onClick={handleAssignRole} disabled={isUpdatingRole} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl mt-4 transition shadow-md flex items-center justify-center gap-2">
+                                {isUpdatingRole ? 'Updating...' : <><CheckCircle size={18}/> Confirm & Assign Role</>}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} accept="image/*" className="hidden" />
+
             <div className="flex justify-between items-center mb-6">
                 <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-500 hover:text-blue-600 font-bold transition bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100 w-fit">
                     <ArrowLeft size={18} /> Back
                 </button>
 
-                {canPromote && !isSelf && (
+                {/* 🌟 Manage Role Button Visibility */}
+                {canManageRole && !isSelf && (
                     <button 
-                        onClick={handleToggleCoreMember}
-                        disabled={isUpdatingRole}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black transition shadow-sm border ${
-                            profile.is_core_member 
-                            ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' 
-                            : 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
-                        }`}
+                        onClick={() => setIsRoleModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl font-black transition shadow-sm border bg-white text-gray-700 border-gray-200 hover:bg-gray-50 hover:text-blue-600"
                     >
-                        <Star size={18} className={profile.is_core_member ? 'fill-red-600' : 'fill-yellow-500'} /> 
-                        {isUpdatingRole ? 'Updating...' : profile.is_core_member ? 'Revoke Core Status' : 'Make Core Member'}
+                        <Settings size={18} /> Manage Role
                     </button>
                 )}
             </div>
@@ -167,6 +205,12 @@ export default function PublicProfilePage() {
                                 <span className="absolute z-0">{profile.user?.first_name?.charAt(0) || 'U'}</span>
                                 {profile.profile_image && <img src={getImgUrl(profile.profile_image)} alt="" className="absolute inset-0 w-full h-full object-cover z-10" onError={(e) => e.currentTarget.style.display = 'none'} />}
                             </div>
+                            
+                            {canSuperEditPhoto && !isSelf && (
+                                <button onClick={() => fileInputRef.current?.click()} title="Upload photo for this member" className="absolute bottom-1 right-1 z-30 bg-blue-600 text-white p-2.5 rounded-full border-4 border-white hover:bg-blue-700 transition shadow-lg cursor-pointer flex items-center justify-center hover:scale-105">
+                                    <Camera size={16} />
+                                </button>
+                            )}
                         </div>
                         
                         <div className="mb-2">

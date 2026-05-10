@@ -5,10 +5,18 @@ from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ObjectDoesNotExist
-from .models import SamajProfile, VerificationVote, FamilyLinkRequest
+from .models import SamajProfile, VerificationVote, FamilyLinkRequest, AuditLog
 from .serializers import SamajProfileSerializer
 
 User = get_user_model()
+
+# 🌟 HELPER: Universal Logging Function
+def log_activity(user, action, module, details):
+    try:
+        if user and not user.is_anonymous:
+            AuditLog.objects.create(user=user, action=action, module=module, details=details)
+    except Exception as e:
+        pass
 
 class SamajProfileViewSet(viewsets.ModelViewSet):
     queryset = SamajProfile.objects.all().order_by('-created_at')
@@ -22,30 +30,76 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
     def pending_verifications(self, request):
         profiles = SamajProfile.objects.filter(verification_status='PENDING').order_by('created_at')
         serializer = self.get_serializer(profiles, many=True, context={'request': request})
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        data = serializer.data
+        for i, profile in enumerate(profiles):
+            votes = profile.votes_received.all()
+            data[i]['current_votes'] = votes.count()
+            
+            # 🌟 UPGRADED FIX: Fetch rich details of voters (like Directory) instead of just names
+            voter_details = []
+            for vote in votes:
+                voter_user = vote.core_member
+                try:
+                    v_profile = SamajProfile.objects.get(user=voter_user)
+                    voter_details.append({
+                        "name": f"{voter_user.first_name} {voter_user.last_name}".strip() or voter_user.username,
+                        "samaj_id": v_profile.samaj_id,
+                        "image": v_profile.profile_image.url if v_profile.profile_image else None,
+                        "gotra": v_profile.gotra_en
+                    })
+                except SamajProfile.DoesNotExist:
+                    voter_details.append({
+                        "name": f"{voter_user.first_name} {voter_user.last_name}".strip() or voter_user.username,
+                        "samaj_id": "N/A",
+                        "image": None,
+                        "gotra": ""
+                    })
+                    
+            data[i]['verified_by'] = voter_details
+            
+        return Response(data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def verify_member(self, request, pk=None):
         profile = self.get_object()
-
-        if request.user.role == 'SUPERADMIN' or request.user.is_superuser:
-            profile.verification_status = 'VERIFIED'
-            profile.save(update_fields=['verification_status'])
-            return Response({"message": "Superadmin Override: Profile verified instantly!", "status": "VERIFIED"}, status=status.HTTP_200_OK)
+        action_type = request.data.get('action', 'VERIFY')
 
         try:
             voter_profile = SamajProfile.objects.get(user=request.user)
-            if not voter_profile.is_core_member:
-                return Response({"error": "Access Denied: Only Core Members can verify other users."}, status=status.HTTP_403_FORBIDDEN)
+            is_authorized = voter_profile.is_core_member or request.user.role in ['SUPERADMIN', 'ADMIN', 'CORE_ADMIN']
         except SamajProfile.DoesNotExist:
-            return Response({"error": "Your Samaj Profile does not exist."}, status=status.HTTP_400_BAD_REQUEST)
+            is_authorized = request.user.is_superuser or request.user.role in ['SUPERADMIN', 'ADMIN', 'CORE_ADMIN']
+
+        if not is_authorized:
+            return Response({"error": "Access Denied: Only Core Members or Admins can review users."}, status=status.HTTP_403_FORBIDDEN)
+
+        if action_type == 'REJECT':
+            profile.verification_status = 'REJECTED'
+            profile.save(update_fields=['verification_status'])
+            log_activity(request.user, 'UPDATE', 'Verification', f"Rejected user profile: {profile.user.first_name} ({profile.samaj_id})")
+            return Response({"message": f"{profile.user.first_name}'s profile has been Rejected.", "status": "REJECTED"}, status=status.HTTP_200_OK)
+
+        if request.user.role in ['SUPERADMIN', 'ADMIN', 'CORE_ADMIN'] or request.user.is_superuser:
+            profile.verification_status = 'VERIFIED'
+            profile.save(update_fields=['verification_status'])
+            log_activity(request.user, 'UPDATE', 'Verification', f"Admin 1-Shot Verify: Verified user {profile.user.first_name} ({profile.samaj_id})")
+            return Response({"message": "Admin Override: Profile verified instantly!", "status": "VERIFIED"}, status=status.HTTP_200_OK)
 
         vote, created = VerificationVote.objects.get_or_create(core_member=request.user, pending_profile=profile)
-        if not created: return Response({"error": "You have already voted to verify this profile."}, status=status.HTTP_400_BAD_REQUEST)
+        if not created: 
+            return Response({"error": "You have already voted to verify this profile."}, status=status.HTTP_400_BAD_REQUEST)
 
         current_votes = profile.votes_received.count()
         current_status = "VERIFIED" if current_votes >= 5 else "PENDING"
         
+        log_activity(request.user, 'UPDATE', 'Verification', f"Voted to verify {profile.user.first_name}. Total votes: {current_votes}/5")
+
+        if current_status == "VERIFIED":
+            profile.verification_status = 'VERIFIED'
+            profile.save(update_fields=['verification_status'])
+            log_activity(request.user, 'UPDATE', 'Verification', f"Profile Fully Verified: {profile.user.first_name} ({profile.samaj_id}) reached 5 votes.")
+
         return Response({"message": f"Vote cast successfully! ({current_votes}/5 votes collected)", "current_votes": current_votes, "status": current_status}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
@@ -81,6 +135,7 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
             if FamilyLinkRequest.objects.filter(sender=sender, receiver=receiver, status='PENDING').exists():
                 return Response({"error": "Request already pending with this user."}, status=status.HTTP_400_BAD_REQUEST)
             FamilyLinkRequest.objects.create(sender=sender, receiver=receiver, relation_type=relation_type)
+            log_activity(request.user, 'CREATE', 'Family Graph', f"Sent {relation_type} link request to {receiver.user.first_name}")
             return Response({"message": "Request sent successfully!"}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -122,8 +177,11 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
                 sender.save()
                 receiver.save()
                 link_req.status = 'ACCEPTED'
+                log_activity(request.user, 'UPDATE', 'Family Graph', f"Accepted {rel} connection with {sender.user.first_name}")
             else:
                 link_req.status = 'REJECTED'
+                log_activity(request.user, 'UPDATE', 'Family Graph', f"Rejected link request from {link_req.sender.user.first_name}")
+                
             link_req.save()
             return Response({"message": f"Request {action.lower()}ed successfully!"}, status=status.HTTP_200_OK)
         except Exception as e:
@@ -134,13 +192,11 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
         target_profile = self.get_object()
         
         is_allowed = False
-        if request.user.is_superuser:
+        if request.user.is_superuser or request.user.role in ['SUPERADMIN', 'ADMIN', 'CORE_ADMIN']:
             is_allowed = True
         elif hasattr(request.user, 'samaj_profile'):
             user_profile = request.user.samaj_profile
-            if user_profile.is_core_member:
-                is_allowed = True
-            elif target_profile.id == user_profile.id:
+            if target_profile.id == user_profile.id:
                 is_allowed = True
             elif target_profile in [user_profile.father, user_profile.mother, user_profile.spouse]:
                 is_allowed = True
@@ -153,48 +209,54 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
         if 'profile_image' in request.FILES:
             target_profile.profile_image = request.FILES['profile_image']
             target_profile.save(update_fields=['profile_image'])
+            log_activity(request.user, 'UPDATE', 'Directory Profile', f"Updated photo for {target_profile.user.first_name} ({target_profile.samaj_id})")
             return Response({"message": "Photo updated successfully!", "profile_image": target_profile.profile_image.url}, status=status.HTTP_200_OK)
         else:
             return Response({"error": "No image provided."}, status=status.HTTP_400_BAD_REQUEST)
 
-    # ==========================================
-    # 🌟 NEW: TOGGLE CORE MEMBER STATUS
-    # ==========================================
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
-    def toggle_core_member(self, request, pk=None):
+    def assign_role(self, request, pk=None):
         target_profile = self.get_object()
+        target_user = target_profile.user
+        new_role = request.data.get('role')
 
-        # 1. Check Authorization: Only Superadmin, ERP Admin, or Existing Core Member can do this
+        user_role = request.user.role
         is_authorized = False
-        if request.user.is_superuser or request.user.role == 'ADMIN':
+
+        if request.user.is_superuser or user_role == 'SUPERADMIN':
             is_authorized = True
-        elif hasattr(request.user, 'samaj_profile') and request.user.samaj_profile.is_core_member:
+        elif user_role == 'ADMIN' and new_role in ['CORE_ADMIN', 'CORE_MEMBER', 'EVENT_ADMIN', 'EVENT_USER', 'USER']:
+            is_authorized = True
+        elif user_role == 'CORE_ADMIN' and new_role in ['CORE_MEMBER', 'EVENT_USER', 'USER']:
             is_authorized = True
 
         if not is_authorized:
-            return Response({"error": "Only Admins or existing Core Members can promote others."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "Access Denied: You cannot assign this high-level role."}, status=status.HTTP_403_FORBIDDEN)
 
-        # 2. Prevent self-demotion accidentally
         if hasattr(request.user, 'samaj_profile') and target_profile.id == request.user.samaj_profile.id:
-            return Response({"error": "You cannot change your own Core Member status."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "You cannot change your own role."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 3. Toggle the status
-        target_profile.is_core_member = not target_profile.is_core_member
+        target_user.role = new_role
+        target_user.save(update_fields=['role'])
+
+        if new_role in ['SUPERADMIN', 'ADMIN', 'CORE_ADMIN', 'CORE_MEMBER']:
+            target_profile.is_core_member = True
+        else:
+            target_profile.is_core_member = False
+            
         target_profile.save(update_fields=['is_core_member'])
+        log_activity(request.user, 'UPDATE', 'Role Management', f"Assigned role {new_role} to {target_user.first_name} ({target_user.username})")
 
-        status_msg = "PROMOTED TO" if target_profile.is_core_member else "REMOVED FROM"
         return Response({
-            "message": f"Successfully {status_msg} Core Member status!", 
+            "message": f"Successfully assigned {new_role} role!", 
+            "role": new_role,
             "is_core_member": target_profile.is_core_member
         }, status=status.HTTP_200_OK)
 
-    # ==========================================
-    # 🌟 SUPER API: EXTENDABLE BULK FAMILY IMPORT
-    # ==========================================
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def bulk_family_import(self, request):
         is_authorized = False
-        if request.user.is_superuser:
+        if request.user.is_superuser or request.user.role in ['SUPERADMIN', 'ADMIN', 'CORE_ADMIN', 'CORE_MEMBER']:
             is_authorized = True
         elif hasattr(request.user, 'samaj_profile') and request.user.samaj_profile.is_core_member:
             is_authorized = True
@@ -217,7 +279,6 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
 
         try:
             with transaction.atomic():
-                # 1. CREATE OR FETCH HEAD
                 if head_data.get('is_existing') and head_data.get('existing_username'):
                     try:
                         head_user = User.objects.get(username=head_data['existing_username'])
@@ -242,11 +303,11 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
                         village_en=head_data.get('village_en', ''),
                         gotra_en=head_data.get('gotra_en', ''),
                         gender=head_data.get('gender', 'M'),
-                        verification_status='VERIFIED'
+                        verification_status='VERIFIED',
+                        registration_source='BULK'
                     )
                     created_profiles.append(f"New Master Created: {head_user.first_name} (User ID: {head_user.username})")
 
-                # 2. CREATE MEMBERS AND SET DIRECT RELATIONS
                 for mem in members_data:
                     m_username = generate_username(mem.get('first_name'), mem.get('mobile_no'))
                     m_user = User.objects.create_user(
@@ -264,7 +325,8 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
                         village_en=mem.get('village_en', head_profile.village_en),
                         gotra_en=mem.get('gotra_en', ''),
                         gender=mem.get('gender', 'M'),
-                        verification_status='VERIFIED'
+                        verification_status='VERIFIED',
+                        registration_source='BULK'
                     )
 
                     relation = mem.get('relation_to_head', '').upper()
@@ -285,22 +347,14 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
                 
                 head_profile.save()
 
-                # =======================================================
-                # 🌟 UPGRADED SMART AUTO-RELATION ALGORITHM 🌟
-                # =======================================================
-                # DB se wapas bulaya taaki memory ki galti na ho!
                 actual_head = SamajProfile.objects.get(id=head_profile.id)
 
-                # RULE 1: Direct SQL update to assign Spouse to Children
                 if actual_head.spouse:
                     if actual_head.gender == 'M': 
-                        # Head is Father, Spouse is Mother (Auto-assign Mother to all kids)
                         SamajProfile.objects.filter(father=actual_head, mother__isnull=True).update(mother=actual_head.spouse)
                     elif actual_head.gender == 'F': 
-                        # Head is Mother, Spouse is Father (Auto-assign Father to all kids)
                         SamajProfile.objects.filter(mother=actual_head, father__isnull=True).update(father=actual_head.spouse)
                             
-                # RULE 2: Bind Parents to each other (If someone adds both Father and Mother)
                 if actual_head.father and actual_head.mother:
                     if not actual_head.father.spouse:
                         actual_head.father.spouse = actual_head.mother
@@ -309,11 +363,12 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
                         actual_head.mother.spouse = actual_head.father
                         actual_head.mother.save(update_fields=['spouse'])
                         
-                # RULE 3: Ensure Bidirectional Spouse for safety
                 if actual_head.spouse:
                     if not actual_head.spouse.spouse:
                         actual_head.spouse.spouse = actual_head
                         actual_head.spouse.save(update_fields=['spouse'])
+            
+            log_activity(request.user, 'CREATE', 'Bulk Import', f"Imported family of {len(members_data) + 1} members under {head_data.get('first_name')}")
 
             return Response({
                 "message": "Family Bulk Import Successful!", 

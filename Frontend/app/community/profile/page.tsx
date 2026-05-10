@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
-import { MapPin, Phone, Mail, ShieldCheck, Heart, Edit, Camera, X, Search, Clock, CheckCircle, Send, Trash2, UserCheck, Users, AlertTriangle, Briefcase, GraduationCap } from 'lucide-react';
+import { MapPin, Phone, Mail, ShieldCheck, Heart, Edit, Camera, X, Search, Clock, CheckCircle, Send, Trash2, UserCheck, Users, AlertTriangle, Briefcase, GraduationCap, Star } from 'lucide-react';
 import Link from 'next/link';
 import api from '@/lib/api';
 
@@ -334,11 +334,19 @@ export default function MyProfilePage() {
                             </div>
                         </div>
                         
-                        {samajProfile?.verification_status === 'VERIFIED' && (
-                            <div className="bg-green-50 text-green-700 border border-green-200 px-4 py-2 rounded-full flex items-center gap-2 text-sm font-black uppercase tracking-wider shadow-sm mt-4 md:mt-0 self-start md:self-end shrink-0">
-                                <ShieldCheck size={18} /> Verified Member
-                            </div>
-                        )}
+                        {/* 🌟 ADDED: UI FIX FOR CORE MEMBER BADGE ON OWN PROFILE */}
+                        <div className="flex flex-col items-end gap-2 mt-4 md:mt-0">
+                            {samajProfile?.is_core_member && (
+                                <div className="bg-yellow-100 text-yellow-800 border border-yellow-300 px-4 py-1.5 rounded-full flex items-center gap-2 text-xs font-black uppercase tracking-wider shadow-sm">
+                                    <Star size={14} className="fill-yellow-600" /> Core Member
+                                </div>
+                            )}
+                            {samajProfile?.verification_status === 'VERIFIED' && (
+                                <div className="bg-green-50 text-green-700 border border-green-200 px-4 py-1.5 rounded-full flex items-center gap-2 text-xs font-black uppercase tracking-wider shadow-sm">
+                                    <ShieldCheck size={16} /> Verified Member
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

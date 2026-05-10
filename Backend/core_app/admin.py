@@ -62,8 +62,8 @@ class SamajProfileAdmin(admin.ModelAdmin):
     list_display = ('samaj_id', 'user', 'gender', 'village_en', 'verification_status')
     search_fields = ('samaj_id', 'user__first_name', 'user__first_name_hi', 'mobile_2')
     list_filter = ('verification_status', 'gender', 'village_en')
-    # Use raw_id_fields for large datasets to prevent browser lag when selecting parents/spouse
-    raw_id_fields = ('user', 'father', 'mother', 'spouse')
+    # 🌟 UPGRADED: Changed 'spouse' to 'spouses' to match the ManyToManyField update
+    raw_id_fields = ('user', 'father', 'mother', 'spouses')
 
 # ==========================================
 # 📸 ALBUMS & COMMITTEES ADMIN (New)
