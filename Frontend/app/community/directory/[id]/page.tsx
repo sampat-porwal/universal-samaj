@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { MapPin, Phone, ShieldCheck, Heart, ArrowLeft, Users, UserCheck, Star, Camera, Settings, X, CheckCircle } from 'lucide-react';
+import { MapPin, Phone, ShieldCheck, Heart, ArrowLeft, Users, UserCheck, Star, Camera, Settings, X, CheckCircle, Network } from 'lucide-react';
 import api from '@/lib/api';
 
 export default function PublicProfilePage() {
@@ -179,20 +179,26 @@ export default function PublicProfilePage() {
 
             <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} accept="image/*" className="hidden" />
 
+            {/* 🌟 UPDATED: Added Family Tree Button to Top Actions */}
             <div className="flex justify-between items-center mb-6">
                 <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-500 hover:text-blue-600 font-bold transition bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100 w-fit">
                     <ArrowLeft size={18} /> Back
                 </button>
 
-                {/* 🌟 Manage Role Button Visibility */}
-                {canManageRole && !isSelf && (
-                    <button 
-                        onClick={() => setIsRoleModalOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2 rounded-xl font-black transition shadow-sm border bg-white text-gray-700 border-gray-200 hover:bg-gray-50 hover:text-blue-600"
-                    >
-                        <Settings size={18} /> Manage Role
-                    </button>
-                )}
+                <div className="flex gap-3">
+                    <Link href={`/community/tree/${profileId}`} className="flex items-center gap-2 px-4 py-2 rounded-xl font-black transition shadow-sm border border-purple-600 bg-purple-600 text-white hover:bg-purple-700">
+                        <Network size={18} /> Family Tree
+                    </Link>
+
+                    {canManageRole && !isSelf && (
+                        <button 
+                            onClick={() => setIsRoleModalOpen(true)}
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl font-black transition shadow-sm border bg-white text-gray-700 border-gray-200 hover:bg-gray-50 hover:text-blue-600"
+                        >
+                            <Settings size={18} /> Manage Role
+                        </button>
+                    )}
+                </div>
             </div>
 
             <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-8 pt-24 md:pt-32 relative">

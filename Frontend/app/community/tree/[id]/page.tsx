@@ -1,10 +1,11 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Network, AlignLeft, Target, ChevronDown, ChevronRight, User, ArrowLeft } from 'lucide-react';
+import { Target, ArrowLeft, X, MapPin, Heart, User as UserIcon } from 'lucide-react';
 import api from '@/lib/api';
+import Link from 'next/link';
 
-// TypeScript Interfaces for the Tree Data
+// TypeScript Interfaces
 interface SpouseNode {
     id: number;
     name: string;
@@ -31,7 +32,17 @@ export default function FamilyTreePage() {
     const [treeData, setTreeData] = useState<TreeNode | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [viewMode, setViewMode] = useState<'PYRAMID' | 'HORIZONTAL'>('PYRAMID');
+    
+    // State for Dialog Box (Detailed Info)
+    const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
+
+    // For mouse drag scrolling
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [startX, setStartX] = useState(0);
+    const [scrollLeft, setScrollLeft] = useState(0);
+    const [startY, setStartY] = useState(0);
+    const [scrollTop, setScrollTop] = useState(0);
 
     useEffect(() => {
         fetchTreeData();
@@ -55,106 +66,137 @@ export default function FamilyTreePage() {
         return path.startsWith('http') ? path : `http://127.0.0.1:8000${path}`;
     };
 
+    // Mouse Drag Handlers for easy navigation
+    const handleMouseDown = (e: React.MouseEvent) => {
+        if (!scrollRef.current) return;
+        setIsDragging(true);
+        setStartX(e.pageX - scrollRef.current.offsetLeft);
+        setScrollLeft(scrollRef.current.scrollLeft);
+        setStartY(e.pageY - scrollRef.current.offsetTop);
+        setScrollTop(scrollRef.current.scrollTop);
+    };
+
+    const handleMouseLeave = () => setIsDragging(false);
+    const handleMouseUp = () => setIsDragging(false);
+
+    const handleMouseMove = (e: React.MouseEvent) => {
+        if (!isDragging || !scrollRef.current) return;
+        e.preventDefault();
+        const x = e.pageX - scrollRef.current.offsetLeft;
+        const walkX = (x - startX) * 2; 
+        scrollRef.current.scrollLeft = scrollLeft - walkX;
+        
+        const y = e.pageY - scrollRef.current.offsetTop;
+        const walkY = (y - startY) * 2;
+        scrollRef.current.scrollTop = scrollTop - walkY;
+    };
+
     // =========================================================
-    // 🌟 RECURSIVE COMPONENT TO RENDER EACH NODE & ITS CHILDREN
+    // 🌟 PERFECT PYRAMID NODE (ANTI-SQUISH `shrink-0` APPLIED)
     // =========================================================
-    const FamilyNode = ({ node, level }: { node: TreeNode, level: number }) => {
-        const [isExpanded, setIsExpanded] = useState(true);
+    const FamilyNode = ({ 
+        node, 
+        level, 
+        isFirst = true, 
+        isLast = true, 
+        isOnlyChild = true 
+    }: { 
+        node: TreeNode, 
+        level: number, 
+        isFirst?: boolean, 
+        isLast?: boolean, 
+        isOnlyChild?: boolean 
+    }) => {
+        const isRoot = level === 1;
         const hasChildren = node.children && node.children.length > 0;
-        const isHorizontal = viewMode === 'HORIZONTAL';
+        const [isExpanded, setIsExpanded] = useState(true);
 
-        // Helper to format the Card
-        const renderCard = (person: any, isMain: boolean) => (
-            <div className={`relative flex items-center gap-3 p-3 rounded-2xl border-2 shadow-sm transition-all bg-white min-w-[220px] max-w-[260px]
-                ${isMain ? 'border-blue-200 hover:border-blue-400' : 'border-pink-200 hover:border-pink-400'}
-            `}>
-                {/* Profile Image */}
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-white text-lg shrink-0 overflow-hidden shadow-inner
-                    ${isMain ? 'bg-blue-500' : 'bg-pink-500'}
-                `}>
-                    {person.image ? (
-                        <img src={getImgUrl(person.image)} className="w-full h-full object-cover" alt="" onError={(e) => e.currentTarget.style.display = 'none'} />
-                    ) : (
-                        person.name?.charAt(0) || 'U'
-                    )}
-                </div>
-                
-                {/* Details */}
-                <div className="flex flex-col">
-                    <span className="text-sm font-black text-gray-900 truncate" title={person.name}>{person.name}</span>
-                    <span className="text-[10px] font-bold text-gray-500">{person.samaj_id || 'Spouse'} {person.gotra ? `• ${person.gotra}` : ''}</span>
-                </div>
-
-                {/* Make Root Button (Only for Main Profile, to jump into their tree) */}
-                {isMain && (
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); router.push(`/community/tree/${person.id}`); }}
-                        title="Make Root (Center Tree Here)"
-                        className="absolute -top-3 -right-3 bg-gray-900 text-white p-1.5 rounded-full hover:bg-blue-600 transition shadow-md z-10"
-                    >
-                        <Target size={14} />
-                    </button>
-                )}
-            </div>
-        );
+        const isMale = node.gender === 'M';
+        const borderColor = isMale ? 'border-blue-500' : 'border-pink-500';
+        const textColor = isMale ? 'text-blue-700' : 'text-pink-700';
+        const badgeBg = isMale ? 'bg-blue-100 text-blue-800' : 'bg-pink-100 text-pink-800';
 
         return (
-            <div className={`flex ${isHorizontal ? 'flex-row' : 'flex-col'} items-center relative`}>
+            // 🌟 `shrink-0` ENSURES IT NEVER COMPRESSES! `min-w-[120px]` gives it breathing room.
+            <div className="relative flex flex-col items-center pt-8 shrink-0 min-w-[120px] md:min-w-[140px]">
                 
-                {/* 1. THE COUPLE (Main Node + Spouses side by side) */}
-                <div className={`flex flex-row items-center gap-2 relative z-10 bg-gray-50 p-2 rounded-3xl border border-gray-200 shadow-sm ${level === 1 ? 'ring-4 ring-yellow-300 ring-opacity-50' : ''}`}>
-                    {renderCard(node, true)}
-                    {node.spouses.map((spouse, idx) => (
-                        <React.Fragment key={`spouse-${idx}`}>
-                            <div className="w-4 h-1 bg-gray-300 rounded-full"></div> {/* Link between husband and wife */}
-                            {renderCard(spouse, false)}
-                        </React.Fragment>
-                    ))}
+                {/* --- 1. HORIZONTAL CONNECTOR LINES (Top Border) --- */}
+                {!isOnlyChild && !isRoot && (
+                    <>
+                        <div className={`absolute top-0 left-0 w-1/2 h-8 border-t-[3px] border-slate-400 ${isFirst ? 'hidden' : 'block'}`}></div>
+                        <div className={`absolute top-0 right-0 w-1/2 h-8 border-t-[3px] border-slate-400 ${isLast ? 'hidden' : 'block'}`}></div>
+                    </>
+                )}
 
-                    {/* Expand/Collapse Toggle Button */}
+                {/* --- 2. VERTICAL DROP LINE WITH ARROW --- */}
+                {!isRoot && (
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[3px] h-8 bg-slate-400"></div>
+                )}
+                {!isRoot && (
+                    <div className="absolute top-8 left-1/2 -translate-x-1/2 -translate-y-full w-0 h-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-t-[8px] border-t-slate-400"></div>
+                )}
+
+                {/* --- 3. THE CIRCULAR NODE UI --- */}
+                <div className="relative z-10 flex flex-col items-center group shrink-0">
+                    <div 
+                        onClick={() => setSelectedNode(node)} 
+                        className={`w-16 h-16 rounded-full border-[4px] ${borderColor} shadow-lg flex items-center justify-center overflow-hidden bg-white cursor-pointer hover:scale-110 transition-transform relative z-10 shrink-0`}
+                    >
+                        {node.image ? (
+                            <img src={getImgUrl(node.image)} className="w-full h-full object-cover" alt="" onError={(e) => e.currentTarget.style.display = 'none'} />
+                        ) : (
+                            <span className={`font-black text-xl ${textColor}`}>{node.name?.charAt(0) || 'U'}</span>
+                        )}
+                        {isRoot && <div className="absolute bottom-0 bg-yellow-400 text-yellow-900 text-[8px] font-black uppercase w-full text-center py-0.5 tracking-widest">Root</div>}
+                    </div>
+
+                    <div className="flex flex-col items-center mt-2 shrink-0">
+                        <span className="text-xs font-black text-gray-800 whitespace-nowrap text-center px-2" title={node.name}>
+                            {node.name.split(' ')[0]} 
+                        </span>
+                        {!isRoot && (
+                            <span className={`text-[9px] font-black uppercase tracking-widest mt-0.5 px-2 py-0.5 rounded-sm shadow-sm whitespace-nowrap ${badgeBg}`}>
+                                {isMale ? 'Son' : 'Daughter'}
+                            </span>
+                        )}
+                    </div>
+
                     {hasChildren && (
                         <button 
                             onClick={() => setIsExpanded(!isExpanded)}
-                            className={`absolute bg-white border border-gray-300 text-gray-600 rounded-full p-1 shadow-md hover:bg-gray-100 z-20 
-                                ${isHorizontal ? '-right-4 top-1/2 transform -translate-y-1/2' : '-bottom-4 left-1/2 transform -translate-x-1/2'}
-                            `}
+                            className="absolute -bottom-8 bg-white border-2 border-slate-300 text-slate-600 rounded-full w-6 h-6 flex items-center justify-center shadow-md hover:bg-slate-800 hover:text-white hover:border-slate-800 transition-colors z-20 shrink-0"
                         >
-                            {isHorizontal ? (isExpanded ? <ChevronRight size={16}/> : <ChevronDown size={16}/>) : (isExpanded ? <ChevronDown size={16}/> : <ChevronRight size={16}/>)}
+                            <span className="font-black text-sm leading-none mt-[-2px]">{isExpanded ? '-' : '+'}</span>
                         </button>
                     )}
                 </div>
 
-                {/* 2. THE CHILDREN BRANCHES */}
+                {/* --- 4. THE CHILDREN BRANCHES CONTAINER --- */}
                 {hasChildren && isExpanded && (
-                    <>
-                        {/* Connecting Line from Parent to Children Wrapper */}
-                        <div className={`bg-gray-300 
-                            ${isHorizontal ? 'h-px w-8' : 'w-px h-8'}
-                        `}></div>
-
-                        {/* Children Wrapper */}
-                        <div className={`flex ${isHorizontal ? 'flex-col gap-6 pl-4 border-l-2 border-gray-300 py-4' : 'flex-row gap-6 pt-4 border-t-2 border-gray-300 px-4'} relative`}>
-                            {node.children.map((child, idx) => (
-                                <div key={`child-${child.id}`} className="relative flex flex-col items-center">
-                                    {/* Line down to specific child */}
-                                    <div className={`bg-gray-300 absolute 
-                                        ${isHorizontal ? 'h-px w-4 -left-4 top-1/2 transform -translate-y-1/2' : 'w-px h-4 -top-4 left-1/2 transform -translate-x-1/2'}
-                                    `}></div>
-                                    <FamilyNode node={child} level={level + 1} />
-                                </div>
+                    <div className="relative flex flex-col items-center mt-8 shrink-0">
+                        <div className="w-[3px] h-8 bg-slate-400 shrink-0"></div>
+                        <div className="flex flex-row justify-center shrink-0">
+                            {node.children.map((child, i) => (
+                                <FamilyNode 
+                                    key={child.id}
+                                    node={child} 
+                                    level={level + 1} 
+                                    isFirst={i === 0}
+                                    isLast={i === node.children.length - 1}
+                                    isOnlyChild={node.children.length === 1}
+                                />
                             ))}
                         </div>
-                    </>
+                    </div>
                 )}
             </div>
         );
     };
 
-
     // =========================================================
     // 🌟 PAGE RENDER
     // =========================================================
-    if (loading) return <div className="p-20 text-center font-bold text-blue-500 animate-pulse text-xl">Generating Family Tree...</div>;
+    if (loading) return <div className="p-20 text-center font-bold text-blue-500 animate-pulse text-xl">Generating Data Graph...</div>;
     
     if (error || !treeData) return (
         <div className="p-10 text-center flex flex-col items-center">
@@ -166,8 +208,81 @@ export default function FamilyTreePage() {
     );
 
     return (
-        <div className="h-full flex flex-col bg-gray-100 font-sans">
+        <div className="h-full flex flex-col bg-gray-100 font-sans relative overflow-hidden">
             
+            {/* 🌟 DIALOG BOX (POP-UP) FOR DETAILED INFO */}
+            {selectedNode && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+                    <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                        
+                        <div className={`h-24 ${selectedNode.gender === 'M' ? 'bg-blue-600' : 'bg-pink-600'} relative flex justify-end p-4`}>
+                            <button onClick={() => setSelectedNode(null)} className="bg-black/20 hover:bg-black/40 text-white rounded-full p-1.5 backdrop-blur-md h-fit transition">
+                                <X size={20} />
+                            </button>
+                            <div className={`absolute -bottom-10 left-6 w-20 h-20 rounded-full border-[4px] border-white shadow-lg flex items-center justify-center overflow-hidden bg-white ${selectedNode.gender === 'M' ? 'text-blue-600' : 'text-pink-600'}`}>
+                                {selectedNode.image ? (
+                                    <img src={getImgUrl(selectedNode.image)} className="w-full h-full object-cover" alt="" onError={(e) => e.currentTarget.style.display = 'none'} />
+                                ) : (
+                                    <span className="font-black text-3xl">{selectedNode.name?.charAt(0)}</span>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="pt-12 px-6 pb-6">
+                            <h2 className="text-2xl font-black text-gray-900">{selectedNode.name}</h2>
+                            <div className="flex items-center gap-2 mt-1 mb-4">
+                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${selectedNode.gender === 'M' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'}`}>
+                                    {selectedNode.gender === 'M' ? 'Male' : 'Female'}
+                                </span>
+                                <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">ID: {selectedNode.samaj_id}</span>
+                            </div>
+
+                            <div className="space-y-3 mb-6 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                                <div className="flex items-center gap-3 text-sm text-gray-700">
+                                    <MapPin size={16} className="text-gray-400" />
+                                    <span className="font-bold">Gotra/Origin:</span> {selectedNode.gotra || 'Not Specified'}
+                                </div>
+                                
+                                {selectedNode.spouses && selectedNode.spouses.length > 0 && (
+                                    <div className="pt-3 border-t border-gray-200 mt-2">
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1"><Heart size={12}/> Spouse(s)</p>
+                                        <div className="flex flex-col gap-2">
+                                            {selectedNode.spouses.map((spouse, idx) => (
+                                                <div key={idx} className={`flex items-center gap-3 bg-white p-2 rounded-xl border ${spouse.gender === 'F' ? 'border-pink-200' : 'border-blue-200'} shadow-sm`}>
+                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0 overflow-hidden ${spouse.gender === 'F' ? 'bg-pink-400' : 'bg-blue-400'}`}>
+                                                        {spouse.image ? <img src={getImgUrl(spouse.image)} className="w-full h-full object-cover" alt=""/> : spouse.name?.charAt(0)}
+                                                    </div>
+                                                    <span className="text-sm font-bold text-gray-800">{spouse.name}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={() => {
+                                        router.push(`/community/tree/${selectedNode.id}`);
+                                        setSelectedNode(null);
+                                    }}
+                                    className="flex-1 bg-gray-900 hover:bg-black text-white font-black py-3 rounded-xl flex items-center justify-center gap-2 transition shadow-md"
+                                >
+                                    <Target size={18}/> Make Root
+                                </button>
+                                <Link 
+                                    href={`/community/directory/${selectedNode.id}`}
+                                    className="flex-1 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-black py-3 rounded-xl flex items-center justify-center gap-2 transition text-center shadow-sm"
+                                >
+                                    <UserIcon size={18}/> View Profile
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+
             {/* TOP CONTROL PANEL */}
             <div className="bg-white border-b border-gray-200 p-4 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4 z-20 shrink-0">
                 <div className="flex items-center gap-4">
@@ -176,32 +291,28 @@ export default function FamilyTreePage() {
                     </button>
                     <div>
                         <h1 className="text-xl md:text-2xl font-black text-gray-900 flex items-center gap-2">
-                            Family Tree <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-md ml-2 border border-blue-200">5 Levels</span>
+                            Family Hierarchy <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-md ml-2 border border-blue-200">5 Levels</span>
                         </h1>
                         <p className="text-sm text-gray-500 font-bold">Viewing origin point: <span className="text-blue-600">{treeData.name}</span></p>
                     </div>
                 </div>
-
-                {/* TOGGLE SWITCH: Pyramid vs Horizontal */}
-                <div className="flex bg-gray-100 p-1 rounded-xl border border-gray-200 shadow-inner">
-                    <button 
-                        onClick={() => setViewMode('PYRAMID')} 
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition ${viewMode === 'PYRAMID' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        <Network size={16} /> Pyramid View
-                    </button>
-                    <button 
-                        onClick={() => setViewMode('HORIZONTAL')} 
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition ${viewMode === 'HORIZONTAL' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        <AlignLeft size={16} /> Horizontal View
-                    </button>
+                <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs font-bold px-4 py-2 rounded-xl shadow-sm">
+                    🖱️ <strong>Click & Drag</strong> anywhere to move around the tree.
                 </div>
             </div>
 
-            {/* TREE CANVAS (Drag/Scroll Area) */}
-            <div className="flex-1 overflow-auto bg-[#f8fafc] p-10 custom-scrollbar relative" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
-                <div className="min-w-max min-h-max pb-32 pr-32 flex justify-center items-start pt-10">
+            {/* 🌟 INFINITE SCROLL CANVAS (DRAG & DROP ENABLED) */}
+            <div 
+                ref={scrollRef}
+                onMouseDown={handleMouseDown}
+                onMouseLeave={handleMouseLeave}
+                onMouseUp={handleMouseUp}
+                onMouseMove={handleMouseMove}
+                className={`flex-1 overflow-auto bg-[#f8fafc] custom-scrollbar relative ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`} 
+                style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}
+            >
+                {/* `w-fit mx-auto min-w-full` guarantees it centers when small, and left-aligns for scroll when huge! */}
+                <div className="w-fit min-w-full mx-auto p-10 pb-32 flex justify-center shrink-0">
                     <FamilyNode node={treeData} level={1} />
                 </div>
             </div>

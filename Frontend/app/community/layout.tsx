@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, Users, Calendar, User, Bell, LogOut, Clock, ShieldAlert, Image as ImageIcon, UploadCloud, LayoutDashboard, UserCheck } from 'lucide-react';
+import { Home, Users, Calendar, User, Bell, LogOut, Clock, ShieldAlert, Image as ImageIcon, UploadCloud, LayoutDashboard, UserCheck, Network } from 'lucide-react';
 import api from '@/lib/api';
 
 export default function CommunityLayout({ children }: { children: React.ReactNode }) {
@@ -14,6 +14,7 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
     const [profile, setProfile] = useState<any>(null);
     const [userRole, setUserRole] = useState(''); 
     const [samajStatus, setSamajStatus] = useState('LOADING'); 
+    const [myProfileId, setMyProfileId] = useState<number | null>(null); // 🌟 Added to track current user's Samaj ID for the Tree link
 
     useEffect(() => {
         const checkAuthAndStatus = async () => {
@@ -35,8 +36,8 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
                 
                 if (myProfile) {
                     setSamajStatus(myProfile.verification_status);
+                    setMyProfileId(myProfile.id); // 🌟 Save ID for the Tree Button
                 } else {
-                    // 🌟 SUPERADMIN & ADMIN BYPASS
                     if (['SUPERADMIN', 'ADMIN'].includes(res.data.role)) {
                         setSamajStatus('VERIFIED'); 
                     } else {
@@ -68,6 +69,11 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
         { name: 'Family Photos', path: '/community/family-photos', icon: <ImageIcon size={24} /> }, 
         { name: 'My Profile', path: '/community/profile', icon: <User size={24} /> },
     ];
+
+    // 🌟 ADD "MY FAMILY TREE" LINK IF USER HAS A SAMAJ PROFILE
+    if (myProfileId) {
+        NAV_ITEMS.splice(2, 0, { name: 'My Tree', path: `/community/tree/${myProfileId}`, icon: <Network size={24} /> });
+    }
 
     // 🌟 STRICT ROLE FILTER 1: Admins & Core Members get Verify & Bulk Import
     if (['SUPERADMIN', 'ADMIN', 'CORE_ADMIN', 'CORE_MEMBER'].includes(userRole)) {
@@ -115,7 +121,6 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
                 <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto custom-scrollbar">
                     {NAV_ITEMS.map((item) => {
                         const isActive = pathname === item.path || pathname.startsWith(item.path + '/');
-                        // Special styling for Dashboard Link to make it stand out
                         const isDashboardLink = item.name === 'ERP Dashboard';
                         
                         return (

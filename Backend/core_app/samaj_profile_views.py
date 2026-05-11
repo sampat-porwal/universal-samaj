@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.core.exceptions import ObjectDoesNotExist
 from .models import SamajProfile, VerificationVote, FamilyLinkRequest, AuditLog
 from .serializers import SamajProfileSerializer
@@ -23,8 +24,39 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
     serializer_class = SamajProfileSerializer
     permission_classes = [IsAuthenticated]
 
-    def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+    # 🌟 NEW: ADMIN SEARCH API FOR BULK IMPORT (ID Finder)
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def admin_search(self, request):
+        if not (request.user.is_superuser or request.user.role in ['SUPERADMIN', 'ADMIN', 'CORE_ADMIN', 'CORE_MEMBER']):
+            return Response({"error": "Access Denied"}, status=status.HTTP_403_FORBIDDEN)
+            
+        query = request.query_params.get('q', '').strip()
+        if not query:
+            return Response([], status=status.HTTP_200_OK)
+            
+        profiles = SamajProfile.objects.filter(
+            Q(user__first_name__icontains=query) | 
+            Q(user__last_name__icontains=query) | 
+            Q(user__username__icontains=query) |
+            Q(user__mobile_no__icontains=query)
+        )[:20]
+        
+        data = []
+        for p in profiles:
+            father_name = f"{p.father.user.first_name} {p.father.user.last_name}".strip() if p.father else "N/A"
+            data.append({
+                "id": p.id,
+                "username": p.user.username,
+                "name": f"{p.user.first_name} {p.user.last_name}".strip(),
+                "mobile": p.user.mobile_no,
+                "village": p.village_en,
+                "gotra": p.gotra_en,
+                "gender": p.gender,
+                "father_name": father_name,
+                "image": p.profile_image.url if p.profile_image else None
+            })
+            
+        return Response(data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def pending_verifications(self, request):
@@ -36,7 +68,6 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
             votes = profile.votes_received.all()
             data[i]['current_votes'] = votes.count()
             
-            # 🌟 UPGRADED FIX: Fetch rich details of voters (like Directory) instead of just names
             voter_details = []
             for vote in votes:
                 voter_user = vote.core_member
@@ -169,8 +200,8 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
                 if rel == 'FATHER': sender.father = receiver
                 elif rel == 'MOTHER': sender.mother = receiver
                 elif rel in ['HUSBAND', 'WIFE']:
-                    sender.spouse = receiver
-                    receiver.spouse = sender
+                    sender.spouses.add(receiver)
+                    receiver.spouses.add(sender)
                 elif rel in ['SON', 'DAUGHTER']:
                     if receiver.gender == 'M': sender.father = receiver
                     else: sender.mother = receiver
@@ -198,7 +229,7 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
             user_profile = request.user.samaj_profile
             if target_profile.id == user_profile.id:
                 is_allowed = True
-            elif target_profile in [user_profile.father, user_profile.mother, user_profile.spouse]:
+            elif target_profile in user_profile.spouses.all() or target_profile in [user_profile.father, user_profile.mother]:
                 is_allowed = True
             elif user_profile in [target_profile.father, target_profile.mother]:
                 is_allowed = True
@@ -271,27 +302,46 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
         if not head_data:
             return Response({"error": "head_of_family data is missing!"}, status=status.HTTP_400_BAD_REQUEST)
 
-        def generate_username(fname, mobile):
-            base = f"{fname.lower().strip()}{str(mobile)[-4:]}" if mobile else f"{fname.lower().strip()}{User.objects.count()}"
-            return base.replace(" ", "")
+        # 🌟 NEW UPGRADED FUNCTION: Safely auto-increments if duplicate found, preventing 500 crashes
+        def safe_generate_username(fname, mobile):
+            base = f"{(fname or 'user').lower().strip()}{str(mobile)[-4:]}" if mobile else f"{(fname or 'user').lower().strip()}{User.objects.count()}"
+            base = base.replace(" ", "")
+            username = base
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                username = f"{base}{counter}"
+                counter += 1
+            return username
 
         created_profiles = []
 
         try:
             with transaction.atomic():
+                
+                # --- PROCESS HEAD ---
                 if head_data.get('is_existing') and head_data.get('existing_username'):
                     try:
                         head_user = User.objects.get(username=head_data['existing_username'])
                         head_profile = SamajProfile.objects.get(user=head_user)
-                        created_profiles.append(f"Linked to Existing Master: {head_user.first_name} ({head_user.username})")
+                        created_profiles.append(f"Master Linked: {head_user.first_name} ({head_user.username})")
                     except User.DoesNotExist:
                         return Response({"error": f"Master user '{head_data['existing_username']}' not found in DB!"}, status=status.HTTP_400_BAD_REQUEST)
                 else:
-                    head_username = generate_username(head_data.get('first_name'), head_data.get('mobile_no'))
+                    # Check Custom Username
+                    req_h_uname = head_data.get('username')
+                    if req_h_uname:
+                        if User.objects.filter(username=req_h_uname).exists():
+                            return Response({"error": f"Username '{req_h_uname}' is already taken! Use is_existing=true or choose another."}, status=status.HTTP_400_BAD_REQUEST)
+                        head_username = req_h_uname
+                    else:
+                        head_username = safe_generate_username(head_data.get('first_name'), head_data.get('mobile_no'))
+
+                    head_pwd = head_data.get('password', f"Samaj@{head_data.get('mobile_no', '1234')}")
+                    
                     head_user = User.objects.create_user(
                         username=head_username,
                         email=head_data.get('email', f"{head_username}@test.com"),
-                        password=f"Samaj@{head_data.get('mobile_no', '1234')}",
+                        password=head_pwd,
                         first_name=head_data.get('first_name', ''),
                         last_name=head_data.get('last_name', ''),
                         mobile_no=head_data.get('mobile_no', ''),
@@ -303,37 +353,62 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
                         village_en=head_data.get('village_en', ''),
                         gotra_en=head_data.get('gotra_en', ''),
                         gender=head_data.get('gender', 'M'),
+                        dob=head_data.get('dob'),
+                        address_1=head_data.get('address_1', ''),
                         verification_status='VERIFIED',
                         registration_source='BULK'
                     )
-                    created_profiles.append(f"New Master Created: {head_user.first_name} (User ID: {head_user.username})")
+                    created_profiles.append(f"Master Created: {head_user.first_name} (User ID: {head_user.username})")
 
+                # --- PROCESS MEMBERS ---
                 for mem in members_data:
-                    m_username = generate_username(mem.get('first_name'), mem.get('mobile_no'))
-                    m_user = User.objects.create_user(
-                        username=m_username,
-                        email=mem.get('email', f"{m_username}@test.com"),
-                        password=f"Samaj@{mem.get('mobile_no', '1234')}",
-                        first_name=mem.get('first_name', ''),
-                        last_name=mem.get('last_name', ''),
-                        mobile_no=mem.get('mobile_no', ''),
-                        is_active=True
-                    )
-                    m_profile = SamajProfile.objects.create(
-                        user=m_user,
-                        samaj_id=f"S-BLK-{User.objects.count()}",
-                        village_en=mem.get('village_en', head_profile.village_en),
-                        gotra_en=mem.get('gotra_en', ''),
-                        gender=mem.get('gender', 'M'),
-                        verification_status='VERIFIED',
-                        registration_source='BULK'
-                    )
-
                     relation = mem.get('relation_to_head', '').upper()
                     
+                    if mem.get('is_existing') and mem.get('existing_username'):
+                        try:
+                            m_user = User.objects.get(username=mem['existing_username'])
+                            m_profile = SamajProfile.objects.get(user=m_user)
+                            created_profiles.append(f"Linked Existing {relation}: {m_user.first_name} ({m_user.username})")
+                        except User.DoesNotExist:
+                            raise Exception(f"Existing member '{mem['existing_username']}' not found!")
+                    else:
+                        # Check Custom Username for members
+                        req_m_uname = mem.get('username')
+                        if req_m_uname:
+                            if User.objects.filter(username=req_m_uname).exists():
+                                raise Exception(f"Custom username '{req_m_uname}' for {mem.get('first_name')} already exists!")
+                            m_username = req_m_uname
+                        else:
+                            m_username = safe_generate_username(mem.get('first_name'), mem.get('mobile_no'))
+
+                        m_pwd = mem.get('password', f"Samaj@{mem.get('mobile_no', '1234')}")
+
+                        m_user = User.objects.create_user(
+                            username=m_username,
+                            email=mem.get('email', f"{m_username}@test.com"),
+                            password=m_pwd,
+                            first_name=mem.get('first_name', ''),
+                            last_name=mem.get('last_name', ''),
+                            mobile_no=mem.get('mobile_no', ''),
+                            is_active=True
+                        )
+                        m_profile = SamajProfile.objects.create(
+                            user=m_user,
+                            samaj_id=f"S-BLK-{User.objects.count()}",
+                            village_en=mem.get('village_en', head_profile.village_en),
+                            gotra_en=mem.get('gotra_en', ''),
+                            gender=mem.get('gender', 'M'),
+                            dob=mem.get('dob'),
+                            address_1=mem.get('address_1', ''),
+                            verification_status='VERIFIED',
+                            registration_source='BULK'
+                        )
+                        created_profiles.append(f"New {relation}: {m_user.first_name} (User ID: {m_user.username})")
+
+                    # Establish Relationships
                     if relation in ['WIFE', 'HUSBAND', 'SPOUSE']:
-                        head_profile.spouse = m_profile
-                        m_profile.spouse = head_profile
+                        head_profile.spouses.add(m_profile)
+                        m_profile.spouses.add(head_profile)
                     elif relation in ['SON', 'DAUGHTER', 'CHILD']:
                         if head_profile.gender == 'M': m_profile.father = head_profile
                         else: m_profile.mother = head_profile
@@ -343,35 +418,25 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
                         head_profile.mother = m_profile
 
                     m_profile.save()
-                    created_profiles.append(f"{relation}: {m_user.first_name} (User ID: {m_user.username})")
                 
                 head_profile.save()
 
                 actual_head = SamajProfile.objects.get(id=head_profile.id)
 
-                if actual_head.spouse:
+                for sp in actual_head.spouses.all():
                     if actual_head.gender == 'M': 
-                        SamajProfile.objects.filter(father=actual_head, mother__isnull=True).update(mother=actual_head.spouse)
+                        SamajProfile.objects.filter(father=actual_head, mother__isnull=True).update(mother=sp)
                     elif actual_head.gender == 'F': 
-                        SamajProfile.objects.filter(mother=actual_head, father__isnull=True).update(father=actual_head.spouse)
+                        SamajProfile.objects.filter(mother=actual_head, father__isnull=True).update(father=sp)
                             
                 if actual_head.father and actual_head.mother:
-                    if not actual_head.father.spouse:
-                        actual_head.father.spouse = actual_head.mother
-                        actual_head.father.save(update_fields=['spouse'])
-                    if not actual_head.mother.spouse:
-                        actual_head.mother.spouse = actual_head.father
-                        actual_head.mother.save(update_fields=['spouse'])
-                        
-                if actual_head.spouse:
-                    if not actual_head.spouse.spouse:
-                        actual_head.spouse.spouse = actual_head
-                        actual_head.spouse.save(update_fields=['spouse'])
+                    actual_head.father.spouses.add(actual_head.mother)
+                    actual_head.mother.spouses.add(actual_head.father)
             
-            log_activity(request.user, 'CREATE', 'Bulk Import', f"Imported family of {len(members_data) + 1} members under {head_data.get('first_name')}")
+            log_activity(request.user, 'CREATE', 'Bulk Import', f"Imported/Linked family graph for {head_data.get('first_name') or head_data.get('existing_username')}")
 
             return Response({
-                "message": "Family Bulk Import Successful!", 
+                "message": "Family Bulk Import & Linking Successful!", 
                 "imported_users": created_profiles
             }, status=status.HTTP_201_CREATED)
 

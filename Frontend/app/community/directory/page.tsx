@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Search, MapPin, Users, ShieldCheck, UserCheck } from 'lucide-react';
+import { Search, MapPin, Users, ShieldCheck, UserCheck, Network } from 'lucide-react';
 import api from '@/lib/api';
 
 export default function CommunityDirectoryPage() {
@@ -96,10 +96,15 @@ export default function CommunityDirectoryPage() {
                                 )}
                             </div>
 
-                            {/* 🌟 THIS LINK MAKES IT RECURSIVE */}
-                            <Link href={`/community/directory/${profile.id}`} className="w-full text-center bg-gray-50 hover:bg-blue-600 text-blue-600 hover:text-white font-bold py-2.5 rounded-xl border border-gray-200 transition-colors text-sm mt-auto block">
-                                View Full Profile
-                            </Link>
+                            {/* 🌟 REPLACED SINGLE BUTTON WITH SPLIT BUTTONS FOR PROFILE & TREE */}
+                            <div className="flex gap-2 mt-auto">
+                                <Link href={`/community/directory/${profile.id}`} className="flex-[3] text-center bg-gray-50 hover:bg-blue-600 text-blue-600 hover:text-white font-bold py-2.5 rounded-xl border border-gray-200 transition-colors text-sm">
+                                    View Profile
+                                </Link>
+                                <Link href={`/community/tree/${profile.id}`} title="View Family Tree" className="flex-[1] flex items-center justify-center bg-purple-50 hover:bg-purple-600 text-purple-600 hover:text-white font-bold py-2.5 rounded-xl border border-purple-200 transition-colors">
+                                    <Network size={18} />
+                                </Link>
+                            </div>
                         </div>
                     ))}
                 </div>
