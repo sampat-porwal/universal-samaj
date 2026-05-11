@@ -66,7 +66,7 @@ export default function FamilyTreePage() {
         return path.startsWith('http') ? path : `http://127.0.0.1:8000${path}`;
     };
 
-    // Mouse Drag Handlers for easy navigation
+    // Mouse Drag Handlers
     const handleMouseDown = (e: React.MouseEvent) => {
         if (!scrollRef.current) return;
         setIsDragging(true);
@@ -75,39 +75,23 @@ export default function FamilyTreePage() {
         setStartY(e.pageY - scrollRef.current.offsetTop);
         setScrollTop(scrollRef.current.scrollTop);
     };
-
     const handleMouseLeave = () => setIsDragging(false);
     const handleMouseUp = () => setIsDragging(false);
-
     const handleMouseMove = (e: React.MouseEvent) => {
         if (!isDragging || !scrollRef.current) return;
         e.preventDefault();
         const x = e.pageX - scrollRef.current.offsetLeft;
         const walkX = (x - startX) * 2; 
         scrollRef.current.scrollLeft = scrollLeft - walkX;
-        
         const y = e.pageY - scrollRef.current.offsetTop;
         const walkY = (y - startY) * 2;
         scrollRef.current.scrollTop = scrollTop - walkY;
     };
 
     // =========================================================
-    // 🌟 PERFECT PYRAMID NODE (ANTI-SQUISH `shrink-0` APPLIED)
+    // 🌟 THE BULLETPROOF LIST-BASED TREE NODE
     // =========================================================
-    const FamilyNode = ({ 
-        node, 
-        level, 
-        isFirst = true, 
-        isLast = true, 
-        isOnlyChild = true 
-    }: { 
-        node: TreeNode, 
-        level: number, 
-        isFirst?: boolean, 
-        isLast?: boolean, 
-        isOnlyChild?: boolean 
-    }) => {
-        const isRoot = level === 1;
+    const FamilyNode = ({ node, isRoot = false }: { node: TreeNode, isRoot?: boolean }) => {
         const hasChildren = node.children && node.children.length > 0;
         const [isExpanded, setIsExpanded] = useState(true);
 
@@ -117,30 +101,12 @@ export default function FamilyTreePage() {
         const badgeBg = isMale ? 'bg-blue-100 text-blue-800' : 'bg-pink-100 text-pink-800';
 
         return (
-            // 🌟 `shrink-0` ENSURES IT NEVER COMPRESSES! `min-w-[120px]` gives it breathing room.
-            <div className="relative flex flex-col items-center pt-8 shrink-0 min-w-[120px] md:min-w-[140px]">
-                
-                {/* --- 1. HORIZONTAL CONNECTOR LINES (Top Border) --- */}
-                {!isOnlyChild && !isRoot && (
-                    <>
-                        <div className={`absolute top-0 left-0 w-1/2 h-8 border-t-[3px] border-slate-400 ${isFirst ? 'hidden' : 'block'}`}></div>
-                        <div className={`absolute top-0 right-0 w-1/2 h-8 border-t-[3px] border-slate-400 ${isLast ? 'hidden' : 'block'}`}></div>
-                    </>
-                )}
-
-                {/* --- 2. VERTICAL DROP LINE WITH ARROW --- */}
-                {!isRoot && (
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[3px] h-8 bg-slate-400"></div>
-                )}
-                {!isRoot && (
-                    <div className="absolute top-8 left-1/2 -translate-x-1/2 -translate-y-full w-0 h-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-t-[8px] border-t-slate-400"></div>
-                )}
-
-                {/* --- 3. THE CIRCULAR NODE UI --- */}
-                <div className="relative z-10 flex flex-col items-center group shrink-0">
+            <li>
+                {/* 🌟 Node UI Box */}
+                <div className="org-node inline-block text-center relative group px-2 md:px-4">
                     <div 
                         onClick={() => setSelectedNode(node)} 
-                        className={`w-16 h-16 rounded-full border-[4px] ${borderColor} shadow-lg flex items-center justify-center overflow-hidden bg-white cursor-pointer hover:scale-110 transition-transform relative z-10 shrink-0`}
+                        className={`w-14 h-14 md:w-16 md:h-16 mx-auto rounded-full border-[3px] ${borderColor} shadow-lg flex items-center justify-center overflow-hidden bg-white cursor-pointer hover:scale-110 transition-transform relative z-10`}
                     >
                         {node.image ? (
                             <img src={getImgUrl(node.image)} className="w-full h-full object-cover" alt="" onError={(e) => e.currentTarget.style.display = 'none'} />
@@ -150,53 +116,44 @@ export default function FamilyTreePage() {
                         {isRoot && <div className="absolute bottom-0 bg-yellow-400 text-yellow-900 text-[8px] font-black uppercase w-full text-center py-0.5 tracking-widest">Root</div>}
                     </div>
 
-                    <div className="flex flex-col items-center mt-2 shrink-0">
-                        <span className="text-xs font-black text-gray-800 whitespace-nowrap text-center px-2" title={node.name}>
+                    <div className="flex flex-col items-center mt-1.5 relative z-10">
+                        <span className="text-xs font-black text-gray-800 whitespace-nowrap text-center px-2 bg-white rounded-md shadow-sm border border-gray-100 mt-1 max-w-[100px] truncate" title={node.name}>
                             {node.name.split(' ')[0]} 
                         </span>
                         {!isRoot && (
-                            <span className={`text-[9px] font-black uppercase tracking-widest mt-0.5 px-2 py-0.5 rounded-sm shadow-sm whitespace-nowrap ${badgeBg}`}>
+                            <span className={`text-[8px] font-black uppercase tracking-widest mt-0.5 px-2 py-0.5 rounded-sm shadow-sm whitespace-nowrap ${badgeBg}`}>
                                 {isMale ? 'Son' : 'Daughter'}
                             </span>
                         )}
                     </div>
 
+                    {/* Expand/Collapse Toggle */}
                     {hasChildren && (
                         <button 
-                            onClick={() => setIsExpanded(!isExpanded)}
-                            className="absolute -bottom-8 bg-white border-2 border-slate-300 text-slate-600 rounded-full w-6 h-6 flex items-center justify-center shadow-md hover:bg-slate-800 hover:text-white hover:border-slate-800 transition-colors z-20 shrink-0"
+                            onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
+                            className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-white border-2 border-slate-300 text-slate-600 rounded-full w-5 h-5 flex items-center justify-center shadow-md hover:bg-slate-800 hover:text-white transition-colors z-20 cursor-pointer"
                         >
-                            <span className="font-black text-sm leading-none mt-[-2px]">{isExpanded ? '-' : '+'}</span>
+                            <span className="font-black text-xs leading-none mt-[-2px]">{isExpanded ? '-' : '+'}</span>
                         </button>
                     )}
                 </div>
 
-                {/* --- 4. THE CHILDREN BRANCHES CONTAINER --- */}
+                {/* 🌟 Sub-Tree (Children) */}
                 {hasChildren && isExpanded && (
-                    <div className="relative flex flex-col items-center mt-8 shrink-0">
-                        <div className="w-[3px] h-8 bg-slate-400 shrink-0"></div>
-                        <div className="flex flex-row justify-center shrink-0">
-                            {node.children.map((child, i) => (
-                                <FamilyNode 
-                                    key={child.id}
-                                    node={child} 
-                                    level={level + 1} 
-                                    isFirst={i === 0}
-                                    isLast={i === node.children.length - 1}
-                                    isOnlyChild={node.children.length === 1}
-                                />
-                            ))}
-                        </div>
-                    </div>
+                    <ul>
+                        {node.children.map((child) => (
+                            <FamilyNode key={child.id} node={child} />
+                        ))}
+                    </ul>
                 )}
-            </div>
+            </li>
         );
     };
 
     // =========================================================
     // 🌟 PAGE RENDER
     // =========================================================
-    if (loading) return <div className="p-20 text-center font-bold text-blue-500 animate-pulse text-xl">Generating Data Graph...</div>;
+    if (loading) return <div className="p-20 text-center font-bold text-blue-500 animate-pulse text-xl">Generating Mathematical Graph...</div>;
     
     if (error || !treeData) return (
         <div className="p-10 text-center flex flex-col items-center">
@@ -210,11 +167,85 @@ export default function FamilyTreePage() {
     return (
         <div className="h-full flex flex-col bg-gray-100 font-sans relative overflow-hidden">
             
+            {/* 🌟 FIXED: spelling is dangerouslySetInnerHTML */}
+            <style dangerouslySetInnerHTML={{
+                __html: `
+                .org-tree {
+                    display: flex;
+                    justify-content: center;
+                }
+                .org-tree ul {
+                    padding-top: 30px; 
+                    position: relative;
+                    transition: all 0.5s;
+                    display: flex;
+                    justify-content: center;
+                    padding-left: 0;
+                    margin: 0;
+                }
+                .org-tree li {
+                    text-align: center;
+                    list-style-type: none;
+                    position: relative;
+                    padding: 30px 5px 0 5px;
+                    transition: all 0.5s;
+                }
+                /* Horizontal connector lines */
+                .org-tree li::before, .org-tree li::after {
+                    content: '';
+                    position: absolute; top: 0; right: 50%;
+                    border-top: 2px solid #94a3b8;
+                    width: 50%; height: 30px;
+                }
+                .org-tree li::after {
+                    right: auto; left: 50%;
+                    border-left: 2px solid #94a3b8;
+                }
+                /* Remove left/right lines from first/last child */
+                .org-tree li:only-child::after, .org-tree li:only-child::before {
+                    display: none;
+                }
+                .org-tree li:only-child { padding-top: 0; }
+                .org-tree li:first-child::before, .org-tree li:last-child::after {
+                    border: 0 none;
+                }
+                .org-tree li:last-child::before {
+                    border-right: 2px solid #94a3b8;
+                    border-radius: 0 4px 0 0;
+                }
+                .org-tree li:first-child::after {
+                    border-radius: 4px 0 0 0;
+                }
+                /* Downward line from parent */
+                .org-tree ul ul::before {
+                    content: '';
+                    position: absolute; top: 0; left: 50%;
+                    border-left: 2px solid #94a3b8;
+                    width: 0; height: 30px;
+                    transform: translateX(-50%);
+                }
+                /* Add Downward Arrow Head */
+                .org-node::before {
+                    content: '';
+                    position: absolute;
+                    top: -30px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    border-left: 6px solid transparent;
+                    border-right: 6px solid transparent;
+                    border-top: 6px solid #94a3b8;
+                    display: none;
+                }
+                /* Show arrow only if it's not the root */
+                .org-tree ul ul li > .org-node::before {
+                    display: block;
+                }
+            `}} />
+
             {/* 🌟 DIALOG BOX (POP-UP) FOR DETAILED INFO */}
             {selectedNode && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
                     <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                        
                         <div className={`h-24 ${selectedNode.gender === 'M' ? 'bg-blue-600' : 'bg-pink-600'} relative flex justify-end p-4`}>
                             <button onClick={() => setSelectedNode(null)} className="bg-black/20 hover:bg-black/40 text-white rounded-full p-1.5 backdrop-blur-md h-fit transition">
                                 <X size={20} />
@@ -301,7 +332,7 @@ export default function FamilyTreePage() {
                 </div>
             </div>
 
-            {/* 🌟 INFINITE SCROLL CANVAS (DRAG & DROP ENABLED) */}
+            {/* 🌟 INFINITE SCROLL CANVAS */}
             <div 
                 ref={scrollRef}
                 onMouseDown={handleMouseDown}
@@ -311,9 +342,10 @@ export default function FamilyTreePage() {
                 className={`flex-1 overflow-auto bg-[#f8fafc] custom-scrollbar relative ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`} 
                 style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}
             >
-                {/* `w-fit mx-auto min-w-full` guarantees it centers when small, and left-aligns for scroll when huge! */}
-                <div className="w-fit min-w-full mx-auto p-10 pb-32 flex justify-center shrink-0">
-                    <FamilyNode node={treeData} level={1} />
+                <div className="w-max min-w-full p-10 pb-32 org-tree">
+                    <ul>
+                        <FamilyNode node={treeData} isRoot={true} />
+                    </ul>
                 </div>
             </div>
 
