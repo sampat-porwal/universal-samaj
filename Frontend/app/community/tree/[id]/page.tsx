@@ -36,13 +36,22 @@ export default function FamilyTreePage() {
     // State for Dialog Box (Detailed Info)
     const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
 
-    // For mouse drag scrolling
+    // For mouse drag scrolling & Virtual Canvas
     const scrollRef = useRef<HTMLDivElement>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [startX, setStartX] = useState(0);
     const [scrollLeft, setScrollLeft] = useState(0);
     const [startY, setStartY] = useState(0);
     const [scrollTop, setScrollTop] = useState(0);
+
+    // 🌟 THE MAGIC: Auto-center the 5000px canvas on load
+    useEffect(() => {
+        if (treeData && scrollRef.current) {
+            const containerWidth = scrollRef.current.clientWidth;
+            // Scroll to the exact middle of the 5000px canvas
+            scrollRef.current.scrollLeft = (5000 - containerWidth) / 2;
+        }
+    }, [treeData]);
 
     useEffect(() => {
         fetchTreeData();
@@ -102,8 +111,8 @@ export default function FamilyTreePage() {
 
         return (
             <li>
-                {/* 🌟 Node UI Box */}
-                <div className="org-node inline-block text-center relative group px-2 md:px-4">
+                {/* 🌟 Node UI Wrapper */}
+                <div className="org-node-wrapper inline-flex flex-col items-center relative group px-2 md:px-4">
                     <div 
                         onClick={() => setSelectedNode(node)} 
                         className={`w-14 h-14 md:w-16 md:h-16 mx-auto rounded-full border-[3px] ${borderColor} shadow-lg flex items-center justify-center overflow-hidden bg-white cursor-pointer hover:scale-110 transition-transform relative z-10`}
@@ -117,7 +126,7 @@ export default function FamilyTreePage() {
                     </div>
 
                     <div className="flex flex-col items-center mt-1.5 relative z-10">
-                        <span className="text-xs font-black text-gray-800 whitespace-nowrap text-center px-2 bg-white rounded-md shadow-sm border border-gray-100 mt-1 max-w-[100px] truncate" title={node.name}>
+                        <span className="text-xs font-black text-gray-800 whitespace-nowrap text-center px-3 py-1 bg-white rounded-md shadow-sm border border-gray-100 mt-1 max-w-[120px] truncate" title={node.name}>
                             {node.name.split(' ')[0]} 
                         </span>
                         {!isRoot && (
@@ -131,7 +140,7 @@ export default function FamilyTreePage() {
                     {hasChildren && (
                         <button 
                             onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
-                            className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-white border-2 border-slate-300 text-slate-600 rounded-full w-5 h-5 flex items-center justify-center shadow-md hover:bg-slate-800 hover:text-white transition-colors z-20 cursor-pointer"
+                            className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-white border border-slate-400 text-slate-600 rounded-full w-5 h-5 flex items-center justify-center shadow-md hover:bg-slate-800 hover:text-white transition-colors z-20 cursor-pointer"
                         >
                             <span className="font-black text-xs leading-none mt-[-2px]">{isExpanded ? '-' : '+'}</span>
                         </button>
@@ -167,18 +176,18 @@ export default function FamilyTreePage() {
     return (
         <div className="h-full flex flex-col bg-gray-100 font-sans relative overflow-hidden">
             
-            {/* 🌟 FIXED: spelling is dangerouslySetInnerHTML */}
+            {/* 🌟 PURE CSS ORG-CHART STYLES */}
             <style dangerouslySetInnerHTML={{
                 __html: `
                 .org-tree {
-                    display: flex;
-                    justify-content: center;
+                    display: inline-block;
                 }
                 .org-tree ul {
                     padding-top: 30px; 
                     position: relative;
                     transition: all 0.5s;
                     display: flex;
+                    flex-wrap: nowrap; 
                     justify-content: center;
                     padding-left: 0;
                     margin: 0;
@@ -196,6 +205,7 @@ export default function FamilyTreePage() {
                     position: absolute; top: 0; right: 50%;
                     border-top: 2px solid #94a3b8;
                     width: 50%; height: 30px;
+                    z-index: 0;
                 }
                 .org-tree li::after {
                     right: auto; left: 50%;
@@ -223,9 +233,10 @@ export default function FamilyTreePage() {
                     border-left: 2px solid #94a3b8;
                     width: 0; height: 30px;
                     transform: translateX(-50%);
+                    z-index: 0;
                 }
                 /* Add Downward Arrow Head */
-                .org-node::before {
+                .org-node-wrapper::before {
                     content: '';
                     position: absolute;
                     top: -30px;
@@ -235,9 +246,10 @@ export default function FamilyTreePage() {
                     border-right: 6px solid transparent;
                     border-top: 6px solid #94a3b8;
                     display: none;
+                    z-index: 1;
                 }
                 /* Show arrow only if it's not the root */
-                .org-tree ul ul li > .org-node::before {
+                .org-tree ul ul li > .org-node-wrapper::before {
                     display: block;
                 }
             `}} />
@@ -332,7 +344,7 @@ export default function FamilyTreePage() {
                 </div>
             </div>
 
-            {/* 🌟 INFINITE SCROLL CANVAS */}
+            {/* 🌟 5000px INFINITE CANVAS (The Ultimate Fix for Left-Cutoff) */}
             <div 
                 ref={scrollRef}
                 onMouseDown={handleMouseDown}
@@ -342,10 +354,13 @@ export default function FamilyTreePage() {
                 className={`flex-1 overflow-auto bg-[#f8fafc] custom-scrollbar relative ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`} 
                 style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}
             >
-                <div className="w-max min-w-full p-10 pb-32 org-tree">
-                    <ul>
-                        <FamilyNode node={treeData} isRoot={true} />
-                    </ul>
+                {/* A massive 5000px wide wrapper. JavaScript auto-scrolls to the exact center on load. */}
+                <div className="w-[5000px] flex justify-center pt-10 pb-32">
+                    <div className="org-tree">
+                        <ul>
+                            <FamilyNode node={treeData} isRoot={true} />
+                        </ul>
+                    </div>
                 </div>
             </div>
 
