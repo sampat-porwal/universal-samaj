@@ -58,7 +58,27 @@ export default function FamilyTreePage() {
         try {
             setLoading(true);
             const res = await api.get(`/samaj/tree/${profileId}/`);
-            setTreeData(res.data);
+            
+            // 🌟 THE MAGIC FIX: Recursive Search to force the exact requested ID as the Root.
+            // If the Backend returns the parent, this will chop off the parent and extract ONLY the requested child!
+            const targetId = parseInt(profileId as string);
+            
+            const findRequestedNode = (node: TreeNode): TreeNode | null => {
+                if (node.id === targetId) return node;
+                if (node.children && node.children.length > 0) {
+                    for (let child of node.children) {
+                        const found = findRequestedNode(child);
+                        if (found) return found;
+                    }
+                }
+                return null;
+            };
+
+            const absoluteRoot = findRequestedNode(res.data);
+            
+            // Set the extracted target as the Master Root (Fallback to full data if somehow not found)
+            setTreeData(absoluteRoot || res.data);
+
         } catch (err: any) {
             console.error("Failed to load tree", err);
             setError("Failed to load Family Tree.");
@@ -95,10 +115,8 @@ export default function FamilyTreePage() {
     // 🌟 SMART NAME FORMATTER (Removes 'Suwalka' & adds (S)/(D)/(H)/(W))
     const getDisplayName = (name: string, gender: string, isSpouse: boolean = false) => {
         if (!name) return '';
-        // Remove "Suwalka" (case-insensitive) globally from the string
         let cleanName = name.replace(/suwalka/gi, '').trim();
         
-        // Add relation suffix
         let suffix = '';
         if (!isSpouse) {
             suffix = gender === 'M' ? '(S)' : '(D)';
@@ -123,7 +141,7 @@ export default function FamilyTreePage() {
         return (
             <div className="flex flex-col items-center shrink-0 z-10 transition-all duration-300" style={{ width: '130px' }}>
                 
-                {/* 👨‍👩‍👧 1. CARD BODY (Clicks Propagate Fixed) */}
+                {/* 👨‍👩‍👧 1. CARD BODY */}
                 <div 
                     onClick={() => setSelectedNode(node)} 
                     onMouseDown={(e) => e.stopPropagation()}
@@ -143,7 +161,6 @@ export default function FamilyTreePage() {
                                 <span className="font-bold text-gray-400 text-lg">{node.name.charAt(0)}</span>
                             )}
                         </div>
-                        {/* 🌟 Smart Name Applied - with truncate to prevent text overflow */}
                         <span className="text-[11px] font-black text-gray-800 text-center truncate w-full mt-1 px-1 leading-tight" title={node.name}>
                             {getDisplayName(node.name, node.gender, false)}
                         </span>
@@ -162,7 +179,6 @@ export default function FamilyTreePage() {
                                     <span className="font-bold text-gray-400 text-xs">{spouse.name.charAt(0)}</span>
                                 )}
                             </div>
-                            {/* 🌟 Smart Spouse Name Applied */}
                             <span className="text-[10px] font-bold text-gray-600 text-center truncate w-full mt-1 px-1 leading-tight" title={spouse.name}>
                                 {getDisplayName(spouse.name, spouse.gender, true)}
                             </span>
@@ -174,7 +190,7 @@ export default function FamilyTreePage() {
                     )}
                 </div>
 
-                {/* 🔘 2. ALWAYS 3 BUTTONS (Bulletproof Clicks) */}
+                {/* 🔘 2. ALWAYS 3 BUTTONS */}
                 <div 
                     className="flex gap-1.5 mt-2 justify-center w-full relative z-50 pointer-events-auto"
                     onMouseDown={(e) => e.stopPropagation()}
@@ -250,36 +266,28 @@ export default function FamilyTreePage() {
             }
         }, [nodes]);
 
-        // Left-Sort
         const activeNode = nodes.find(n => n.id === activeId) || nodes[0];
         const otherNodes = nodes.filter(n => n.id !== activeNode?.id);
         const sortedNodes = activeNode ? [activeNode, ...otherNodes] : [];
 
-        // Exact math for 130px cards
         const centerOffset = 65; 
 
         return (
             <div className="flex flex-col items-start relative w-max transition-all duration-500">
-                
-                {/* 🌟 1. ROW OF SIBLINGS (10px Gap) */}
+                {/* 🌟 ROW OF SIBLINGS (10px Gap) */}
                 <div className="flex flex-row relative pt-[28px] w-max" style={{ gap: '10px' }}>
-                    
-                    {/* Horizontal connector line (Darker & Thicker) */}
                     {sortedNodes.length > 1 && (
                         <div 
                             className="absolute top-0 h-[3px] bg-slate-700 z-0"
                             style={{ left: `${centerOffset}px`, right: `${centerOffset}px` }}
                         ></div>
                     )}
-
                     {sortedNodes.map((node) => (
                         <div key={node.id} className="relative flex flex-col items-center w-[130px] shrink-0">
-                            {/* Drop line */}
                             <div 
                                 className="absolute top-0 w-[3px] h-[28px] bg-slate-700 -translate-y-full z-0 -translate-x-1/2"
                                 style={{ left: `${centerOffset}px` }}
                             ></div>
-                            
                             <CoupleCard 
                                 node={node} 
                                 isActive={node.id === activeNode?.id} 
@@ -289,18 +297,15 @@ export default function FamilyTreePage() {
                     ))}
                 </div>
 
-                {/* 🌟 2. CHILDREN OF ACTIVE NODE */}
+                {/* 🌟 CHILDREN OF ACTIVE NODE */}
                 {activeNode && activeNode.children && activeNode.children.length > 0 && (
                     <div className="relative mt-[4px] w-max animate-in fade-in slide-in-from-top-4 duration-300">
-                        {/* Vertical line dropping from active node */}
                         <div 
                             className="w-[3px] h-[28px] bg-slate-700 relative z-0 -translate-x-1/2"
                             style={{ marginLeft: `${centerOffset}px` }}
                         >
                             <div className="absolute bottom-[-2px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-slate-700"></div>
                         </div>
-                        
-                        {/* Recursive rendering */}
                         <LevelRow nodes={activeNode.children} />
                     </div>
                 )}
@@ -321,9 +326,9 @@ export default function FamilyTreePage() {
     );
 
     return (
-        <div className="h-full flex flex-col bg-gray-50 font-sans relative overflow-hidden">
+        <div className="h-screen flex flex-col bg-gray-50 font-sans relative overflow-hidden">
             
-            {/* 🌟 DIALOG BOX FOR DETAILS */}
+            {/* DIALOG BOX */}
             {selectedNode && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
                     <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
@@ -379,12 +384,12 @@ export default function FamilyTreePage() {
                     </div>
                 </div>
                 <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold px-4 py-2 rounded-xl shadow-sm flex items-center gap-2">
-                    🖱️ Drag to scroll. Click <ArrowRight size={14} className="inline bg-white border rounded shadow-sm" /> to shift a branch!
+                    🖱️ Drag/Scroll horizontally or vertically. Click <ArrowRight size={14} className="inline bg-white border rounded shadow-sm" /> to shift a branch!
                 </div>
             </div>
 
-            {/* 🌟 THE CANVAS (Perfect Vertical & Horizontal Scroll Guaranteed!) */}
-            <div className="flex-1 relative w-full h-full overflow-hidden bg-[#f8fafc]">
+            {/* THE CANVAS */}
+            <div className="flex-1 min-h-0 relative w-full overflow-hidden bg-[#f8fafc]">
                 <div 
                     ref={scrollRef}
                     onMouseDown={handleMouseDown}
@@ -394,8 +399,7 @@ export default function FamilyTreePage() {
                     className={`absolute inset-0 overflow-auto custom-scrollbar ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`} 
                     style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}
                 >
-                    {/* pb-[800px] guarantees you can scroll down infinitely as levels increase! */}
-                    <div className="min-w-full w-max min-h-max flex flex-col items-start p-6 sm:p-10 pb-[800px] pr-[800px]">
+                    <div className="w-max h-max flex flex-col items-start p-6 sm:p-10 pb-[800px] pr-[800px]">
                         
                         {/* MASTER ROOT */}
                         <div className="relative flex flex-col items-center w-[130px] shrink-0 z-10">
