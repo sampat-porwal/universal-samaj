@@ -42,6 +42,14 @@ export default function FamilyTreePage() {
     const [startY, setStartY] = useState(0);
     const [scrollTop, setScrollTop] = useState(0);
 
+    // Auto-center the massive canvas on load
+    useEffect(() => {
+        if (treeData && scrollRef.current) {
+            const containerWidth = scrollRef.current.clientWidth;
+            scrollRef.current.scrollLeft = (10000 - containerWidth) / 2;
+        }
+    }, [treeData]);
+
     useEffect(() => {
         fetchTreeData();
     }, [profileId]);
@@ -64,7 +72,6 @@ export default function FamilyTreePage() {
         return path.startsWith('http') ? path : `http://127.0.0.1:8000${path}`;
     };
 
-    // Drag to scroll logic
     const handleMouseDown = (e: React.MouseEvent) => {
         if (!scrollRef.current) return;
         setIsDragging(true);
@@ -85,31 +92,30 @@ export default function FamilyTreePage() {
     };
 
     // =========================================================
-    // 🌟 THE VERTICAL COUPLE CARD (Fixed Image Size Bug & 15% Bigger)
+    // 🌟 STRICT VERTICAL COUPLE CARD (Fixed 130x140 size)
     // =========================================================
     const CoupleCard = ({ node, isRoot, isActive, onActivate }: { node: TreeNode, isRoot?: boolean, isActive?: boolean, onActivate: () => void }) => {
         const spouse = node.spouses && node.spouses.length > 0 ? node.spouses[0] : null;
+        const hasChildren = node.children && node.children.length > 0;
         
-        // Colors & Borders based on Gender
         const isMale = node.gender === 'M';
         const borderColor = isMale ? 'border-blue-500' : 'border-pink-500';
         const cardBorder = isRoot ? `border-[3px] ${borderColor} shadow-md` : `border-[2px] ${borderColor} shadow-sm hover:shadow-md hover:-translate-y-0.5`;
 
         return (
-            <div className="flex flex-col items-center w-[130px] shrink-0 z-10 transition-all duration-300">
+            <div className="flex flex-col items-center shrink-0 z-10 transition-all duration-300" style={{ width: '130px' }}>
                 
-                {/* 👨‍👩‍👧 Card Body (Click opens Dialog Profile) */}
+                {/* 👨‍👩‍👧 1. CARD BODY (STRICTLY FIXED HEIGHT & WIDTH) */}
                 <div 
                     onClick={() => setSelectedNode(node)} 
-                    className={`w-[130px] bg-white rounded-xl ${cardBorder} flex flex-col cursor-pointer transition-all`}
-                    style={{ overflow: 'hidden' }} // Lock overflow to prevent image breakout
+                    className={`bg-white rounded-xl ${cardBorder} flex flex-col cursor-pointer transition-all shrink-0`}
+                    style={{ width: '130px', height: '140px', minWidth: '130px', minHeight: '140px', maxWidth: '130px', maxHeight: '140px', overflow: 'hidden' }}
                 >
-                    {/* Primary User (Top) */}
-                    <div className="flex flex-col items-center p-2 bg-gray-50/40">
-                        {/* 🌟 STRICT IMAGE LOCK (Solves the Giant Image Bug) */}
+                    {/* Primary User (Top Half - Exactly 70px) */}
+                    <div className="flex flex-col items-center justify-center p-2 bg-gray-50/40 shrink-0" style={{ height: '70px', minHeight: '70px' }}>
                         <div 
-                            className={`rounded-full border-[2px] ${borderColor} bg-white flex items-center justify-center shrink-0`}
-                            style={{ width: '48px', height: '48px', minWidth: '48px', minHeight: '48px', overflow: 'hidden' }}
+                            className={`rounded-full border-[2px] ${borderColor} bg-white flex items-center justify-center shrink-0 overflow-hidden`}
+                            style={{ width: '42px', height: '42px', minWidth: '42px', minHeight: '42px' }}
                         >
                             {node.image ? (
                                 <img src={getImgUrl(node.image)} alt={node.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -117,15 +123,15 @@ export default function FamilyTreePage() {
                                 <span className="font-bold text-gray-400 text-lg">{node.name.charAt(0)}</span>
                             )}
                         </div>
-                        <span className="text-xs font-black text-gray-800 text-center truncate w-full mt-1.5 px-1" title={node.name}>{node.name.split(' ')[0]}</span>
+                        <span className="text-xs font-black text-gray-800 text-center truncate w-full mt-1 px-1 leading-tight" title={node.name}>{node.name.split(' ')[0]}</span>
                     </div>
 
-                    {/* Spouse User (Bottom) */}
+                    {/* Spouse User (Bottom Half - Exactly 70px) */}
                     {spouse ? (
-                        <div className={`flex flex-col items-center p-2 border-t border-gray-200 bg-gray-50/40`}>
+                        <div className={`flex flex-col items-center justify-center p-2 border-t border-gray-200 bg-gray-50/40 shrink-0`} style={{ height: '70px', minHeight: '70px' }}>
                             <div 
-                                className={`rounded-full border-[2px] ${spouse.gender === 'M' ? 'border-blue-400' : 'border-pink-400'} bg-white flex items-center justify-center shrink-0`}
-                                style={{ width: '36px', height: '36px', minWidth: '36px', minHeight: '36px', overflow: 'hidden' }}
+                                className={`rounded-full border-[2px] ${spouse.gender === 'M' ? 'border-blue-400' : 'border-pink-400'} bg-white flex items-center justify-center shrink-0 overflow-hidden`}
+                                style={{ width: '34px', height: '34px', minWidth: '34px', minHeight: '34px' }}
                             >
                                 {spouse.image ? (
                                     <img src={getImgUrl(spouse.image)} alt={spouse.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -133,47 +139,67 @@ export default function FamilyTreePage() {
                                     <span className="font-bold text-gray-400 text-xs">{spouse.name.charAt(0)}</span>
                                 )}
                             </div>
-                            <span className="text-[10px] font-bold text-gray-600 text-center truncate w-full mt-1 px-1" title={spouse.name}>{spouse.name.split(' ')[0]}</span>
+                            <span className="text-[10px] font-bold text-gray-600 text-center truncate w-full mt-1 px-1 leading-tight" title={spouse.name}>{spouse.name.split(' ')[0]}</span>
                         </div>
                     ) : (
-                        <div className="flex flex-col items-center justify-center p-3 border-t border-gray-100 bg-gray-100/50" style={{ height: '70px' }}>
+                        <div className="flex flex-col items-center justify-center p-2 border-t border-gray-100 bg-gray-100/50 shrink-0" style={{ height: '70px', minHeight: '70px' }}>
                             <span className="text-[9px] font-bold text-gray-400 uppercase text-center leading-tight">No<br/>Spouse</span>
                         </div>
                     )}
                 </div>
 
-                {/* 🔘 Action Buttons (Icons Only - Clicks Fixed!) */}
+                {/* 🔘 2. ALWAYS 3 BUTTONS (Fixed Clicks & Z-Index) */}
                 <div className="flex gap-1.5 mt-2 justify-center w-full relative z-50">
                     
-                    {/* Open/Close Leg Toggle */}
-                    {node.children && node.children.length > 0 && (
-                        <button 
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onActivate(); }} 
-                            className={`p-1.5 rounded-md border shadow-sm transition-colors cursor-pointer ${isActive ? 'bg-slate-800 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-100'}`} 
-                            title={isActive ? "Active Leg" : "Open Leg"}
-                        >
-                            {isActive ? <ArrowDown size={16} strokeWidth={3} /> : <ArrowRight size={16} strokeWidth={3} />}
-                        </button>
-                    )}
-                    
-                    {/* Make Root Button */}
-                    {!isRoot && (
-                        <button 
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.location.href = `/community/tree/${node.id}`; }} 
-                            className="p-1.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-md hover:bg-blue-100 shadow-sm cursor-pointer" 
-                            title="Make Root"
-                        >
-                            <Network size={16} strokeWidth={2.5} />
-                        </button>
-                    )}
-
-                    {/* View Profile Button */}
+                    {/* Button 1: Toggle Leg / Dead End (X) */}
                     <button 
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/community/directory/${node.id}`); }} 
-                        className="p-1.5 bg-gray-50 border border-gray-200 text-gray-700 rounded-md hover:bg-gray-100 shadow-sm cursor-pointer" 
+                        type="button"
+                        onClick={(e) => { 
+                            e.preventDefault(); e.stopPropagation(); 
+                            if (hasChildren) onActivate(); 
+                        }} 
+                        className={`flex items-center justify-center w-8 h-8 rounded-md border shadow-sm transition-colors cursor-pointer ${
+                            !hasChildren ? 'bg-gray-100 border-gray-200 text-gray-300 cursor-not-allowed' :
+                            isActive ? 'bg-blue-600 border-blue-700 text-white' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-100'
+                        }`} 
+                        disabled={!hasChildren}
+                        title={!hasChildren ? "No Branches" : isActive ? "Active Leg" : "Open Leg"}
+                    >
+                        <span className="pointer-events-none flex items-center justify-center">
+                            {!hasChildren ? <X size={16} strokeWidth={3} /> :
+                             isActive ? <ArrowDown size={16} strokeWidth={3} /> :
+                             <ArrowRight size={16} strokeWidth={3} />}
+                        </span>
+                    </button>
+                    
+                    {/* Button 2: Make Root */}
+                    <button 
+                        type="button"
+                        onClick={(e) => { 
+                            e.preventDefault(); e.stopPropagation(); 
+                            window.location.href = `/community/tree/${node.id}`; 
+                        }} 
+                        className="flex items-center justify-center w-8 h-8 bg-blue-50 border border-blue-200 text-blue-700 rounded-md hover:bg-blue-100 shadow-sm cursor-pointer" 
+                        title="Make Root"
+                    >
+                        <span className="pointer-events-none flex items-center justify-center">
+                            <Network size={16} strokeWidth={2.5} />
+                        </span>
+                    </button>
+
+                    {/* Button 3: View Profile */}
+                    <button 
+                        type="button"
+                        onClick={(e) => { 
+                            e.preventDefault(); e.stopPropagation(); 
+                            router.push(`/community/directory/${node.id}`); 
+                        }} 
+                        className="flex items-center justify-center w-8 h-8 bg-gray-50 border border-gray-200 text-gray-700 rounded-md hover:bg-gray-100 shadow-sm cursor-pointer" 
                         title="View Profile"
                     >
-                        <UserIcon size={16} strokeWidth={2.5} />
+                        <span className="pointer-events-none flex items-center justify-center">
+                            <UserIcon size={16} strokeWidth={2.5} />
+                        </span>
                     </button>
                 </div>
             </div>
@@ -181,33 +207,36 @@ export default function FamilyTreePage() {
     };
 
     // =========================================================
-    // 🌟 LEFT-SORTING WATERFALL (Fixes the Click Selection Bug)
+    // 🌟 LEFT-SORTING WATERFALL & DARKER LINES
     // =========================================================
     const LevelRow = ({ nodes }: { nodes: TreeNode[] }) => {
-        // Track the actively opened node ID
         const [activeId, setActiveId] = useState<number | null>(nodes[0]?.id || null);
 
-        // 🌟 NEW LOGIC: Deterministic Sorting to guarantee the active node shifts to index 0 (Left-most)
+        useEffect(() => {
+            if (nodes.length > 0 && (!activeId || !nodes.find(n => n.id === activeId))) {
+                setActiveId(nodes[0].id);
+            }
+        }, [nodes]);
+
+        // Left-Sort
         const activeNode = nodes.find(n => n.id === activeId) || nodes[0];
         const otherNodes = nodes.filter(n => n.id !== activeNode?.id);
         const sortedNodes = activeNode ? [activeNode, ...otherNodes] : [];
 
-        // Math for 130px width cards
-        // Center of a 130px card is 65px. Drop line offset is 64px to center the 2px line.
-        const cardCenterOffset = 65; 
-        const lineOffset = 64; 
+        // Exact math for 130px cards to perfectly center the 3px thick line
+        const centerOffset = 65; 
 
         return (
             <div className="flex flex-col items-start relative w-max transition-all duration-500">
                 
-                {/* 🌟 1. ROW OF SIBLINGS (Gap 5px) */}
-                <div className="flex flex-row gap-[5px] relative pt-[24px] w-max">
+                {/* 🌟 1. ROW OF SIBLINGS (5px Gap) */}
+                <div className="flex flex-row gap-[5px] relative pt-[28px] w-max">
                     
-                    {/* Horizontal connector line */}
+                    {/* Horizontal connector line (DARKER bg-slate-700, THICKER h-[3px]) */}
                     {sortedNodes.length > 1 && (
                         <div 
-                            className="absolute top-0 h-[2px] bg-slate-400 z-0"
-                            style={{ left: `${cardCenterOffset}px`, right: `${cardCenterOffset}px` }}
+                            className="absolute top-0 h-[3px] bg-slate-700 z-0"
+                            style={{ left: `${centerOffset}px`, right: `${centerOffset}px` }}
                         ></div>
                     )}
 
@@ -215,8 +244,8 @@ export default function FamilyTreePage() {
                         <div key={node.id} className="relative flex flex-col items-center w-[130px] shrink-0">
                             {/* Drop line from horizontal axis down to the node */}
                             <div 
-                                className="absolute top-0 w-[2px] h-[24px] bg-slate-400 -translate-y-full z-0"
-                                style={{ left: `${lineOffset}px` }}
+                                className="absolute top-0 w-[3px] h-[28px] bg-slate-700 -translate-y-full z-0 -translate-x-1/2"
+                                style={{ left: `${centerOffset}px` }}
                             ></div>
                             
                             <CoupleCard 
@@ -233,14 +262,14 @@ export default function FamilyTreePage() {
                     <div className="relative mt-[4px] w-max animate-in fade-in slide-in-from-top-4 duration-300">
                         {/* Vertical line dropping from active node to its children row */}
                         <div 
-                            className="w-[2px] h-[24px] bg-slate-400 relative z-0"
-                            style={{ marginLeft: `${lineOffset}px` }}
+                            className="w-[3px] h-[28px] bg-slate-700 relative z-0 -translate-x-1/2"
+                            style={{ marginLeft: `${centerOffset}px` }}
                         >
-                            {/* Downward Arrow pointing to the first child of the next level */}
-                            <div className="absolute bottom-[-2px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[6px] border-t-slate-400"></div>
+                            {/* Downward Arrow pointing to the first child */}
+                            <div className="absolute bottom-[-2px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-slate-700"></div>
                         </div>
                         
-                        {/* Recursive rendering of the next generation */}
+                        {/* Recursive rendering */}
                         <LevelRow nodes={activeNode.children} />
                     </div>
                 )}
@@ -336,16 +365,16 @@ export default function FamilyTreePage() {
                 <div className="min-w-full w-max flex flex-col items-start p-6 sm:p-10 pb-32">
                     
                     {/* MASTER ROOT (Starts exactly at the Left) */}
-                    <div className="relative flex flex-col items-center w-[130px] shrink-0">
+                    <div className="relative flex flex-col items-center w-[130px] shrink-0 z-10">
                         <CoupleCard node={treeData} isRoot={true} isActive={true} onActivate={() => {}} />
                     </div>
 
                     {/* RENDER ENTIRE CHILDREN WATERFALL */}
                     {treeData.children && treeData.children.length > 0 && (
                         <div className="relative mt-[4px] w-max">
-                            <div className="w-[2px] h-[24px] bg-slate-400 ml-[64px] relative z-0">
+                            <div className="w-[3px] h-[28px] bg-slate-700 ml-[65px] relative z-0 -translate-x-1/2">
                                 {/* Downward Arrow pointing to 1st Generation */}
-                                <div className="absolute bottom-[-2px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[6px] border-t-slate-400"></div>
+                                <div className="absolute bottom-[-2px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-slate-700"></div>
                             </div>
                             <LevelRow nodes={treeData.children} />
                         </div>
