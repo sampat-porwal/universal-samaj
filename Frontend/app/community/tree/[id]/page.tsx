@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, User as UserIcon, Network, ArrowRight, ArrowDown, X, MapPin, Heart } from 'lucide-react';
+import { ArrowLeft, User as UserIcon, Network, ArrowRight, ArrowDown, X, MapPin } from 'lucide-react';
 import api from '@/lib/api';
 import Link from 'next/link';
 
@@ -64,6 +64,7 @@ export default function FamilyTreePage() {
         return path.startsWith('http') ? path : `http://127.0.0.1:8000${path}`;
     };
 
+    // Drag to scroll logic
     const handleMouseDown = (e: React.MouseEvent) => {
         if (!scrollRef.current) return;
         setIsDragging(true);
@@ -84,79 +85,95 @@ export default function FamilyTreePage() {
     };
 
     // =========================================================
-    // 🌟 THE VERTICAL COUPLE CARD (Top Husband, Bottom Wife)
+    // 🌟 THE VERTICAL COUPLE CARD (Fixed Image Size Bug & 15% Bigger)
     // =========================================================
     const CoupleCard = ({ node, isRoot, isActive, onActivate }: { node: TreeNode, isRoot?: boolean, isActive?: boolean, onActivate: () => void }) => {
         const spouse = node.spouses && node.spouses.length > 0 ? node.spouses[0] : null;
         
-        // Colors & Borders based entirely on Gender (No text needed!)
+        // Colors & Borders based on Gender
         const isMale = node.gender === 'M';
         const borderColor = isMale ? 'border-blue-500' : 'border-pink-500';
-        const bgColor = isMale ? 'bg-blue-50/50' : 'bg-pink-50/50';
-        const rootShadow = isRoot ? 'shadow-lg border-[3px]' : 'shadow-sm border-[2px] hover:shadow-md hover:-translate-y-0.5';
+        const cardBorder = isRoot ? `border-[3px] ${borderColor} shadow-md` : `border-[2px] ${borderColor} shadow-sm hover:shadow-md hover:-translate-y-0.5`;
 
         return (
-            <div className="flex flex-col items-center w-[90px] shrink-0 z-10 transition-all duration-300">
+            <div className="flex flex-col items-center w-[130px] shrink-0 z-10 transition-all duration-300">
                 
-                {/* 👨‍👩‍👧 Card Body (Clicking card opens Dialog Profile) */}
+                {/* 👨‍👩‍👧 Card Body (Click opens Dialog Profile) */}
                 <div 
                     onClick={() => setSelectedNode(node)} 
-                    className={`w-[84px] bg-white rounded-xl ${borderColor} ${rootShadow} overflow-hidden flex flex-col cursor-pointer transition-all`}
+                    className={`w-[130px] bg-white rounded-xl ${cardBorder} flex flex-col cursor-pointer transition-all`}
+                    style={{ overflow: 'hidden' }} // Lock overflow to prevent image breakout
                 >
                     {/* Primary User (Top) */}
-                    <div className={`flex flex-col items-center p-1.5 ${bgColor}`}>
-                        <div className={`w-10 h-10 rounded-full border-[2.5px] ${borderColor} bg-white overflow-hidden shrink-0 flex items-center justify-center`}>
-                            {node.image ? <img src={getImgUrl(node.image)} className="w-full h-full object-cover"/> : <span className="font-bold text-gray-500 text-sm">{node.name.charAt(0)}</span>}
+                    <div className="flex flex-col items-center p-2 bg-gray-50/40">
+                        {/* 🌟 STRICT IMAGE LOCK (Solves the Giant Image Bug) */}
+                        <div 
+                            className={`rounded-full border-[2px] ${borderColor} bg-white flex items-center justify-center shrink-0`}
+                            style={{ width: '48px', height: '48px', minWidth: '48px', minHeight: '48px', overflow: 'hidden' }}
+                        >
+                            {node.image ? (
+                                <img src={getImgUrl(node.image)} alt={node.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                                <span className="font-bold text-gray-400 text-lg">{node.name.charAt(0)}</span>
+                            )}
                         </div>
-                        <span className="text-[10px] font-black text-gray-800 text-center truncate w-full mt-1 px-0.5" title={node.name}>{node.name.split(' ')[0]}</span>
+                        <span className="text-xs font-black text-gray-800 text-center truncate w-full mt-1.5 px-1" title={node.name}>{node.name.split(' ')[0]}</span>
                     </div>
 
                     {/* Spouse User (Bottom) */}
                     {spouse ? (
-                        <div className={`flex flex-col items-center p-1.5 border-t border-gray-200 ${spouse.gender === 'M' ? 'bg-blue-50/50' : 'bg-pink-50/50'}`}>
-                            <div className={`w-8 h-8 rounded-full border-[2px] ${spouse.gender === 'M' ? 'border-blue-400' : 'border-pink-400'} bg-white overflow-hidden shrink-0 flex items-center justify-center`}>
-                                {spouse.image ? <img src={getImgUrl(spouse.image)} className="w-full h-full object-cover"/> : <span className="font-bold text-gray-500 text-[10px]">{spouse.name.charAt(0)}</span>}
+                        <div className={`flex flex-col items-center p-2 border-t border-gray-200 bg-gray-50/40`}>
+                            <div 
+                                className={`rounded-full border-[2px] ${spouse.gender === 'M' ? 'border-blue-400' : 'border-pink-400'} bg-white flex items-center justify-center shrink-0`}
+                                style={{ width: '36px', height: '36px', minWidth: '36px', minHeight: '36px', overflow: 'hidden' }}
+                            >
+                                {spouse.image ? (
+                                    <img src={getImgUrl(spouse.image)} alt={spouse.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : (
+                                    <span className="font-bold text-gray-400 text-xs">{spouse.name.charAt(0)}</span>
+                                )}
                             </div>
-                            <span className="text-[9px] font-bold text-gray-600 text-center truncate w-full mt-1 px-0.5" title={spouse.name}>{spouse.name.split(' ')[0]}</span>
+                            <span className="text-[10px] font-bold text-gray-600 text-center truncate w-full mt-1 px-1" title={spouse.name}>{spouse.name.split(' ')[0]}</span>
                         </div>
                     ) : (
-                        <div className="flex flex-col items-center p-2 border-t border-gray-100 bg-gray-50">
-                            <span className="text-[8px] font-bold text-gray-400 uppercase text-center leading-tight">No<br/>Spouse</span>
+                        <div className="flex flex-col items-center justify-center p-3 border-t border-gray-100 bg-gray-100/50" style={{ height: '70px' }}>
+                            <span className="text-[9px] font-bold text-gray-400 uppercase text-center leading-tight">No<br/>Spouse</span>
                         </div>
                     )}
                 </div>
 
-                {/* 🔘 Action Buttons (Icons Only) directly below */}
-                <div className="flex gap-1 mt-1.5 justify-center w-full">
-                    {/* Toggle Leg (Active) Button */}
+                {/* 🔘 Action Buttons (Icons Only - Clicks Fixed!) */}
+                <div className="flex gap-1.5 mt-2 justify-center w-full relative z-50">
+                    
+                    {/* Open/Close Leg Toggle */}
                     {node.children && node.children.length > 0 && (
                         <button 
-                            onClick={(e) => { e.stopPropagation(); onActivate(); }} 
-                            className={`p-1.5 rounded-md border shadow-sm transition-colors ${isActive ? 'bg-slate-800 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-100'}`} 
-                            title={isActive ? "Close Leg" : "Open Leg"}
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onActivate(); }} 
+                            className={`p-1.5 rounded-md border shadow-sm transition-colors cursor-pointer ${isActive ? 'bg-slate-800 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-100'}`} 
+                            title={isActive ? "Active Leg" : "Open Leg"}
                         >
-                            {isActive ? <ArrowDown size={14} strokeWidth={3} /> : <ArrowRight size={14} strokeWidth={3} />}
+                            {isActive ? <ArrowDown size={16} strokeWidth={3} /> : <ArrowRight size={16} strokeWidth={3} />}
                         </button>
                     )}
                     
                     {/* Make Root Button */}
                     {!isRoot && (
                         <button 
-                            onClick={(e) => { e.stopPropagation(); window.location.href = `/community/tree/${node.id}`; }} 
-                            className="p-1.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-md hover:bg-blue-100 shadow-sm" 
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.location.href = `/community/tree/${node.id}`; }} 
+                            className="p-1.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-md hover:bg-blue-100 shadow-sm cursor-pointer" 
                             title="Make Root"
                         >
-                            <Network size={14} strokeWidth={2.5} />
+                            <Network size={16} strokeWidth={2.5} />
                         </button>
                     )}
 
-                    {/* View Full Profile Button */}
+                    {/* View Profile Button */}
                     <button 
-                        onClick={(e) => { e.stopPropagation(); router.push(`/community/directory/${node.id}`); }} 
-                        className="p-1.5 bg-gray-50 border border-gray-200 text-gray-700 rounded-md hover:bg-gray-100 shadow-sm" 
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/community/directory/${node.id}`); }} 
+                        className="p-1.5 bg-gray-50 border border-gray-200 text-gray-700 rounded-md hover:bg-gray-100 shadow-sm cursor-pointer" 
                         title="View Profile"
                     >
-                        <UserIcon size={14} strokeWidth={2.5} />
+                        <UserIcon size={16} strokeWidth={2.5} />
                     </button>
                 </div>
             </div>
@@ -164,63 +181,66 @@ export default function FamilyTreePage() {
     };
 
     // =========================================================
-    // 🌟 PURE TAILWIND RECURSIVE WATERFALL (No Raw CSS Injection)
+    // 🌟 LEFT-SORTING WATERFALL (Fixes the Click Selection Bug)
     // =========================================================
     const LevelRow = ({ nodes }: { nodes: TreeNode[] }) => {
-        // Find active node (defaults to the first node)
+        // Track the actively opened node ID
         const [activeId, setActiveId] = useState<number | null>(nodes[0]?.id || null);
 
-        // Keep activeId valid if data changes
-        useEffect(() => {
-            if (nodes.length > 0 && !nodes.find(n => n.id === activeId)) {
-                setActiveId(nodes[0].id);
-            }
-        }, [nodes]);
+        // 🌟 NEW LOGIC: Deterministic Sorting to guarantee the active node shifts to index 0 (Left-most)
+        const activeNode = nodes.find(n => n.id === activeId) || nodes[0];
+        const otherNodes = nodes.filter(n => n.id !== activeNode?.id);
+        const sortedNodes = activeNode ? [activeNode, ...otherNodes] : [];
 
-        // Left-Sort: Active node jumps to index 0
-        const sortedNodes = [...nodes].sort((a, b) => {
-            if (a.id === activeId) return -1;
-            if (b.id === activeId) return 1;
-            return 0;
-        });
-
-        const activeNode = sortedNodes[0];
+        // Math for 130px width cards
+        // Center of a 130px card is 65px. Drop line offset is 64px to center the 2px line.
+        const cardCenterOffset = 65; 
+        const lineOffset = 64; 
 
         return (
             <div className="flex flex-col items-start relative w-max transition-all duration-500">
                 
-                {/* 🌟 1. ROW OF SIBLINGS */}
-                <div className="flex flex-row gap-[8px] relative pt-6 w-max">
+                {/* 🌟 1. ROW OF SIBLINGS (Gap 5px) */}
+                <div className="flex flex-row gap-[5px] relative pt-[24px] w-max">
                     
-                    {/* Horizontal connector spanning from center of First child to center of Last child */}
+                    {/* Horizontal connector line */}
                     {sortedNodes.length > 1 && (
-                        <div className="absolute top-0 left-[45px] right-[45px] h-[2px] bg-slate-400 z-0"></div>
+                        <div 
+                            className="absolute top-0 h-[2px] bg-slate-400 z-0"
+                            style={{ left: `${cardCenterOffset}px`, right: `${cardCenterOffset}px` }}
+                        ></div>
                     )}
 
                     {sortedNodes.map((node) => (
-                        <div key={node.id} className="relative flex flex-col items-center w-[90px] shrink-0">
-                            {/* Drop line from horizontal axis to node */}
-                            <div className="absolute top-0 left-[44px] w-[2px] h-6 bg-slate-400 -translate-y-full z-0"></div>
+                        <div key={node.id} className="relative flex flex-col items-center w-[130px] shrink-0">
+                            {/* Drop line from horizontal axis down to the node */}
+                            <div 
+                                className="absolute top-0 w-[2px] h-[24px] bg-slate-400 -translate-y-full z-0"
+                                style={{ left: `${lineOffset}px` }}
+                            ></div>
                             
                             <CoupleCard 
                                 node={node} 
-                                isActive={node.id === activeId} 
-                                onActivate={() => setActiveId(node.id === activeId ? null : node.id)} 
+                                isActive={node.id === activeNode?.id} 
+                                onActivate={() => setActiveId(node.id)} 
                             />
                         </div>
                     ))}
                 </div>
 
-                {/* 🌟 2. CHILDREN OF ACTIVE NODE (Rendered strictly below the active node) */}
-                {activeNode && activeId && activeNode.children && activeNode.children.length > 0 && (
-                    <div className="relative mt-2 w-max animate-in fade-in slide-in-from-top-4 duration-300">
+                {/* 🌟 2. CHILDREN OF ACTIVE NODE */}
+                {activeNode && activeNode.children && activeNode.children.length > 0 && (
+                    <div className="relative mt-[4px] w-max animate-in fade-in slide-in-from-top-4 duration-300">
                         {/* Vertical line dropping from active node to its children row */}
-                        <div className="w-[2px] h-6 bg-slate-400 ml-[44px] relative z-0">
-                            {/* Downward Arrow Head */}
+                        <div 
+                            className="w-[2px] h-[24px] bg-slate-400 relative z-0"
+                            style={{ marginLeft: `${lineOffset}px` }}
+                        >
+                            {/* Downward Arrow pointing to the first child of the next level */}
                             <div className="absolute bottom-[-2px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[6px] border-t-slate-400"></div>
                         </div>
                         
-                        {/* Recursive Call */}
+                        {/* Recursive rendering of the next generation */}
                         <LevelRow nodes={activeNode.children} />
                     </div>
                 )}
@@ -231,7 +251,7 @@ export default function FamilyTreePage() {
     // =========================================================
     // 🌟 PAGE RENDER
     // =========================================================
-    if (loading) return <div className="p-20 text-center font-bold text-blue-500 animate-pulse text-xl">Loading Waterfall...</div>;
+    if (loading) return <div className="p-20 text-center font-bold text-blue-500 animate-pulse text-xl">Loading Graph...</div>;
     
     if (error || !treeData) return (
         <div className="p-10 text-center flex flex-col items-center">
@@ -293,17 +313,17 @@ export default function FamilyTreePage() {
                     <button onClick={() => router.back()} className="bg-gray-100 p-2 rounded-full hover:bg-gray-200 transition text-gray-600"><ArrowLeft size={20} /></button>
                     <div>
                         <h1 className="text-xl md:text-2xl font-black text-gray-900 flex items-center gap-2">
-                            Waterfall Tree <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-md ml-2 border border-blue-200">Compact</span>
+                            Waterfall Tree <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-md ml-2 border border-blue-200">Interactive</span>
                         </h1>
                         <p className="text-sm text-gray-500 font-bold">Viewing origin point: <span className="text-blue-600">{treeData.name}</span></p>
                     </div>
                 </div>
-                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold px-4 py-2 rounded-xl shadow-sm">
-                    🖱️ <strong>Click [▶] Icon</strong> to shift a branch to the Left!
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold px-4 py-2 rounded-xl shadow-sm flex items-center gap-2">
+                    🖱️ Click <ArrowRight size={14} className="inline bg-white border rounded shadow-sm" /> to shift a branch Left!
                 </div>
             </div>
 
-            {/* 🌟 THE CANVAS: strictly items-start (Left Aligned Waterfall) */}
+            {/* 🌟 THE CANVAS (Left Aligned Waterfall) */}
             <div 
                 ref={scrollRef}
                 onMouseDown={handleMouseDown}
@@ -315,16 +335,16 @@ export default function FamilyTreePage() {
             >
                 <div className="min-w-full w-max flex flex-col items-start p-6 sm:p-10 pb-32">
                     
-                    {/* MASTER ROOT */}
-                    <div className="relative flex flex-col items-center w-[90px]">
+                    {/* MASTER ROOT (Starts exactly at the Left) */}
+                    <div className="relative flex flex-col items-center w-[130px] shrink-0">
                         <CoupleCard node={treeData} isRoot={true} isActive={true} onActivate={() => {}} />
                     </div>
 
                     {/* RENDER ENTIRE CHILDREN WATERFALL */}
                     {treeData.children && treeData.children.length > 0 && (
-                        <div className="relative mt-2 w-max">
-                            <div className="w-[2px] h-6 bg-slate-400 ml-[44px] relative z-0">
-                                {/* Downward Arrow to 1st Generation */}
+                        <div className="relative mt-[4px] w-max">
+                            <div className="w-[2px] h-[24px] bg-slate-400 ml-[64px] relative z-0">
+                                {/* Downward Arrow pointing to 1st Generation */}
                                 <div className="absolute bottom-[-2px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[6px] border-t-slate-400"></div>
                             </div>
                             <LevelRow nodes={treeData.children} />
