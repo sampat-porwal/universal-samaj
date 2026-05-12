@@ -177,10 +177,18 @@ export default function MyProfilePage() {
     const familyMembers: any[] = [];
     if (samajProfile?.father && samajProfile.father.id) familyMembers.push({ type: 'Father', data: samajProfile.father });
     if (samajProfile?.mother && samajProfile.mother.id) familyMembers.push({ type: 'Mother', data: samajProfile.mother });
-    if (samajProfile?.spouse && samajProfile.spouse.id) {
+    
+    // 🌟 THE FIX: Same array-handling logic for spouses applied here!
+    if (samajProfile?.spouses && Array.isArray(samajProfile.spouses) && samajProfile.spouses.length > 0) {
+        samajProfile.spouses.forEach((spouseObj: any) => {
+            const spouseType = spouseObj.gender === 'M' ? 'Husband' : 'Wife';
+            familyMembers.push({ type: spouseType, data: spouseObj });
+        });
+    } else if (samajProfile?.spouse && samajProfile.spouse.id) {
         const spouseType = samajProfile.spouse.gender === 'M' ? 'Husband' : 'Wife';
         familyMembers.push({ type: spouseType, data: samajProfile.spouse });
     }
+
     if (samajProfile?.children && Array.isArray(samajProfile.children)) {
         samajProfile.children.forEach((child: any) => {
             const relType = child.gender === 'M' ? 'Son' : 'Daughter';
@@ -412,7 +420,7 @@ export default function MyProfilePage() {
                     </div>
                 )}
 
-                {/* FAMILY GRID */}
+                {/* 🌟 THE FIX IN RENDER: ULTRA-SMART DATA FALLBACK */}
                 {familyMembers.length === 0 ? (
                     <div className="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
                         <p className="text-sm text-gray-500 font-bold mb-4 px-2">Your family tree is empty. Connect with your relatives!</p>
@@ -420,23 +428,46 @@ export default function MyProfilePage() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {familyMembers.map((fam: any, idx) => (
-                            <Link key={idx} href={`/community/directory/${fam.data.id}`} className="block bg-blue-50 p-5 rounded-2xl border border-blue-100 hover:bg-blue-100 hover:border-blue-300 transition-colors group shadow-sm">
-                                <div className="flex justify-between items-center mb-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className="relative w-12 h-12 rounded-full bg-blue-200 text-blue-700 font-black flex items-center justify-center overflow-hidden shrink-0 border-2 border-white shadow-sm">
-                                            <span className="absolute z-0">{fam.data.user?.first_name?.charAt(0) || 'U'}</span>
-                                            {fam.data.profile_image && <img src={getImgUrl(fam.data.profile_image)} className="absolute inset-0 w-full h-full object-cover z-10" onError={(e) => e.currentTarget.style.display = 'none'} alt=""/>}
+                        {familyMembers.map((fam: any, idx) => {
+                            
+                            // Automatically checks if data is hidden inside 'user' object or provided directly
+                            const fName = fam.data.user?.first_name || fam.data.first_name || (fam.data.name ? fam.data.name.split(' ')[0] : 'U');
+                            
+                            let fullName = 'Unknown';
+                            if (fam.data.user?.first_name) {
+                                fullName = `${fam.data.user.first_name} ${fam.data.user.last_name || ''}`.trim();
+                            } else if (fam.data.first_name) {
+                                fullName = `${fam.data.first_name} ${fam.data.last_name || ''}`.trim();
+                            } else if (fam.data.name) {
+                                fullName = fam.data.name;
+                            }
+
+                            const imgPath = fam.data.profile_image || fam.data.image || fam.data.user?.profile_image || null;
+                            const samajId = fam.data.samaj_id || fam.data.user?.samaj_id || 'N/A';
+                            const village = fam.data.village_en || fam.data.user?.village_en || null;
+
+                            return (
+                                <Link key={idx} href={`/community/directory/${fam.data.id}`} className="block bg-blue-50 p-5 rounded-2xl border border-blue-100 hover:bg-blue-100 hover:border-blue-300 transition-colors group shadow-sm">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="relative w-12 h-12 rounded-full bg-blue-200 text-blue-700 font-black flex items-center justify-center overflow-hidden shrink-0 border-2 border-white shadow-sm">
+                                                <span className="absolute z-0">{fName.charAt(0).toUpperCase()}</span>
+                                                {imgPath && <img src={getImgUrl(imgPath)} className="absolute inset-0 w-full h-full object-cover z-10" onError={(e) => e.currentTarget.style.display = 'none'} alt=""/>}
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-0.5">{fam.type}</p>
+                                                <p className="font-black text-gray-900 text-base group-hover:text-blue-700 transition-colors">{fullName}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-0.5">{fam.type}</p>
-                                            <p className="font-black text-gray-900 text-base group-hover:text-blue-700 transition-colors">{fam.data.user?.first_name} {fam.data.user?.last_name}</p>
-                                        </div>
+                                        <div className="text-blue-400 group-hover:text-blue-600 font-black">→</div>
                                     </div>
-                                    <div className="text-blue-400 group-hover:text-blue-600 font-black">→</div>
-                                </div>
-                            </Link>
-                        ))}
+                                    <div className="pt-3 border-t border-blue-100/50 flex flex-col gap-1 text-xs font-bold text-gray-600">
+                                        <span className="flex items-center gap-1"><UserCheck size={12} className="text-blue-400"/> ID: {samajId}</span>
+                                        {village && <span className="flex items-center gap-1"><MapPin size={12} className="text-red-400"/> {village}</span>}
+                                    </div>
+                                </Link>
+                            );
+                        })}
                     </div>
                 )}
             </div>

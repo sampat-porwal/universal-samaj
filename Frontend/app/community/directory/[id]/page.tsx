@@ -93,8 +93,6 @@ export default function PublicProfilePage() {
     );
 
     const isSelf = loggedInUser?.username === profile.user?.username;
-    
-    // 🌟 STRICT ROLE CONDITIONS: Added CORE_ADMIN here
     const canManageRole = ['SUPERADMIN', 'ADMIN', 'CORE_ADMIN'].includes(loggedInUser?.role);
     const canSuperEditPhoto = ['SUPERADMIN', 'ADMIN', 'CORE_ADMIN'].includes(loggedInUser?.role);
 
@@ -103,7 +101,13 @@ export default function PublicProfilePage() {
     if (profile.father && profile.father.id) familyMembers.push({ type: 'Father', data: profile.father });
     if (profile.mother && profile.mother.id) familyMembers.push({ type: 'Mother', data: profile.mother });
     
-    if (profile.spouse && profile.spouse.id) {
+    // 🌟 SMART SPOUSE CATCHER: Automatically detects array or single object formats
+    if (profile.spouses && Array.isArray(profile.spouses) && profile.spouses.length > 0) {
+        profile.spouses.forEach((spouseObj: any) => {
+            const spouseType = spouseObj.gender === 'M' ? 'Husband' : 'Wife';
+            familyMembers.push({ type: spouseType, data: spouseObj });
+        });
+    } else if (profile.spouse && profile.spouse.id) {
         const spouseType = profile.spouse.gender === 'M' ? 'Husband' : 'Wife';
         familyMembers.push({ type: spouseType, data: profile.spouse });
     }
@@ -136,7 +140,7 @@ export default function PublicProfilePage() {
     return (
         <div className="p-4 md:p-6 max-w-5xl mx-auto font-sans relative">
             
-            {/* 🌟 ROLE MANAGEMENT MODAL */}
+            {/* ROLE MANAGEMENT MODAL */}
             {isRoleModalOpen && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-md shadow-2xl">
@@ -145,7 +149,7 @@ export default function PublicProfilePage() {
                             <button onClick={() => setIsRoleModalOpen(false)} className="bg-gray-100 hover:bg-gray-200 p-2 rounded-full transition"><X size={20} className="text-gray-600" /></button>
                         </div>
                         <div className="space-y-4">
-                            <p className="text-sm font-bold text-gray-500">Assigning role for <span className="text-gray-900">{profile.user?.first_name}</span>.</p>
+                            <p className="text-sm font-bold text-gray-500">Assigning role for <span className="text-gray-900">{profile.user?.first_name || profile.name}</span>.</p>
                             
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Select Community Level</label>
@@ -154,7 +158,6 @@ export default function PublicProfilePage() {
                                     <option value="EVENT_USER">Event User (Volunteer)</option>
                                     <option value="CORE_MEMBER">Core Member (Verifier)</option>
                                     
-                                    {/* 🌟 Admin and Superadmin Options */}
                                     {['SUPERADMIN', 'ADMIN'].includes(loggedInUser?.role) && (
                                         <>
                                             <option value="EVENT_ADMIN">Event Admin (Manager)</option>
@@ -162,7 +165,6 @@ export default function PublicProfilePage() {
                                         </>
                                     )}
                                     
-                                    {/* 🌟 Only Superadmin can make another Admin */}
                                     {loggedInUser?.role === 'SUPERADMIN' && (
                                         <option value="ADMIN">System Admin</option>
                                     )}
@@ -179,7 +181,7 @@ export default function PublicProfilePage() {
 
             <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} accept="image/*" className="hidden" />
 
-            {/* 🌟 UPDATED: Added Family Tree Button to Top Actions */}
+            {/* TOP ACTIONS */}
             <div className="flex justify-between items-center mb-6">
                 <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-500 hover:text-blue-600 font-bold transition bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100 w-fit">
                     <ArrowLeft size={18} /> Back
@@ -201,6 +203,7 @@ export default function PublicProfilePage() {
                 </div>
             </div>
 
+            {/* PROFILE HEADER */}
             <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-8 pt-24 md:pt-32 relative">
                 <div className="absolute top-0 left-0 w-full h-32 md:h-40 bg-gradient-to-r from-blue-600 to-purple-600 rounded-t-3xl"></div>
                 
@@ -208,7 +211,7 @@ export default function PublicProfilePage() {
                     <div className="flex flex-col md:flex-row md:items-end gap-5 -mt-16 md:-mt-20">
                         <div className="relative shrink-0 z-20" style={{ width: '140px', height: '140px' }}>
                             <div className="w-full h-full rounded-full bg-blue-50 border-4 border-white shadow-xl flex items-center justify-center text-blue-600 font-black text-5xl overflow-hidden relative">
-                                <span className="absolute z-0">{profile.user?.first_name?.charAt(0) || 'U'}</span>
+                                <span className="absolute z-0">{(profile.user?.first_name || profile.name || 'U').charAt(0)}</span>
                                 {profile.profile_image && <img src={getImgUrl(profile.profile_image)} alt="" className="absolute inset-0 w-full h-full object-cover z-10" onError={(e) => e.currentTarget.style.display = 'none'} />}
                             </div>
                             
@@ -221,7 +224,7 @@ export default function PublicProfilePage() {
                         
                         <div className="mb-2">
                             <h1 className="text-3xl md:text-4xl font-black text-gray-900 leading-tight flex items-center gap-3">
-                                {profile.user?.first_name} {profile.user?.last_name}
+                                {profile.user?.first_name || profile.name} {profile.user?.last_name || ''}
                             </h1>
                             <p className="text-gray-500 font-bold text-lg mt-1">{profile.samaj_id}</p>
                         </div>
@@ -260,6 +263,7 @@ export default function PublicProfilePage() {
                 </div>
             </div>
 
+            {/* 🌟 FAMILY RELATIONSHIPS GRID */}
             <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100">
                 <h2 className="text-xl font-black text-gray-800 mb-6 border-b border-gray-100 pb-4 flex items-center gap-2">
                     <Heart className="text-pink-500" size={24} /> Family Relationships
@@ -271,28 +275,47 @@ export default function PublicProfilePage() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {familyMembers.map((fam: any, idx) => (
-                            <Link key={idx} href={`/community/directory/${fam.data.id}`} className="block bg-blue-50 p-5 rounded-2xl border border-blue-100 hover:bg-blue-100 hover:border-blue-300 transition-colors group shadow-sm">
-                                <div className="flex justify-between items-center mb-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className="relative w-12 h-12 rounded-full bg-blue-200 text-blue-700 font-black flex items-center justify-center overflow-hidden shrink-0 border-2 border-white shadow-sm">
-                                            <span className="absolute z-0">{fam.data.user?.first_name?.charAt(0) || 'U'}</span>
-                                            {fam.data.profile_image && <img src={getImgUrl(fam.data.profile_image)} className="absolute inset-0 w-full h-full object-cover z-10" onError={(e) => e.currentTarget.style.display = 'none'} alt=""/>}
+                        {familyMembers.map((fam: any, idx) => {
+                            
+                            // 🌟 ULTRA-SMART DATA FALLBACK
+                            // Automatically checks if data is hidden inside 'user' object or provided directly
+                            const fName = fam.data.user?.first_name || fam.data.first_name || (fam.data.name ? fam.data.name.split(' ')[0] : 'Unknown');
+                            
+                            let fullName = 'Unknown';
+                            if (fam.data.user?.first_name) {
+                                fullName = `${fam.data.user.first_name} ${fam.data.user.last_name || ''}`.trim();
+                            } else if (fam.data.first_name) {
+                                fullName = `${fam.data.first_name} ${fam.data.last_name || ''}`.trim();
+                            } else if (fam.data.name) {
+                                fullName = fam.data.name;
+                            }
+
+                            const imgPath = fam.data.profile_image || fam.data.image || fam.data.user?.profile_image || null;
+                            const samajId = fam.data.samaj_id || fam.data.user?.samaj_id || 'N/A';
+                            const village = fam.data.village_en || fam.data.user?.village_en || null;
+
+                            return (
+                                <Link key={idx} href={`/community/directory/${fam.data.id}`} className="block bg-blue-50 p-5 rounded-2xl border border-blue-100 hover:bg-blue-100 hover:border-blue-300 transition-colors group shadow-sm">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="relative w-12 h-12 rounded-full bg-blue-200 text-blue-700 font-black flex items-center justify-center overflow-hidden shrink-0 border-2 border-white shadow-sm">
+                                                <span className="absolute z-0">{fName.charAt(0).toUpperCase()}</span>
+                                                {imgPath && <img src={getImgUrl(imgPath)} className="absolute inset-0 w-full h-full object-cover z-10" onError={(e) => e.currentTarget.style.display = 'none'} alt=""/>}
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-0.5">{fam.type}</p>
+                                                <p className="font-black text-gray-900 text-base group-hover:text-blue-700 transition-colors">{fullName}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            {/* Relation Type: Husband/Wife, Son/Daughter, etc. */}
-                                            <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-0.5">{fam.type}</p>
-                                            <p className="font-black text-gray-900 text-base group-hover:text-blue-700 transition-colors">{fam.data.user?.first_name} {fam.data.user?.last_name}</p>
-                                        </div>
+                                        <div className="text-blue-400 group-hover:text-blue-600 font-black">→</div>
                                     </div>
-                                    <div className="text-blue-400 group-hover:text-blue-600 font-black">→</div>
-                                </div>
-                                <div className="pt-3 border-t border-blue-100/50 flex flex-col gap-1 text-xs font-bold text-gray-600">
-                                    <span className="flex items-center gap-1"><UserCheck size={12} className="text-blue-400"/> ID: {fam.data.samaj_id}</span>
-                                    {fam.data.village_en && <span className="flex items-center gap-1"><MapPin size={12} className="text-red-400"/> {fam.data.village_en}</span>}
-                                </div>
-                            </Link>
-                        ))}
+                                    <div className="pt-3 border-t border-blue-100/50 flex flex-col gap-1 text-xs font-bold text-gray-600">
+                                        <span className="flex items-center gap-1"><UserCheck size={12} className="text-blue-400"/> ID: {samajId}</span>
+                                        {village && <span className="flex items-center gap-1"><MapPin size={12} className="text-red-400"/> {village}</span>}
+                                    </div>
+                                </Link>
+                            );
+                        })}
                     </div>
                 )}
             </div>

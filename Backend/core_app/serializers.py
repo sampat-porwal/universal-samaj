@@ -53,7 +53,11 @@ class SamajProfileSerializer(serializers.ModelSerializer):
     # 🌟 CORE RELATIONS
     father = FamilyMemberSerializer(read_only=True)
     mother = FamilyMemberSerializer(read_only=True)
-    spouse = FamilyMemberSerializer(read_only=True)
+    
+    # ❌ PEHLE YAHAN GALTI THI: spouse = FamilyMemberSerializer(read_only=True)
+    # ✅ THE BUG FIX: It MUST be 'spouses' and 'many=True' because it's a ManyToManyField!
+    spouses = FamilyMemberSerializer(many=True, read_only=True)
+    
     children = serializers.SerializerMethodField()
     
     # 🌟 NEW: SECONDARY RELATIONS (Auto-Calculated Siblings)
@@ -69,6 +73,7 @@ class SamajProfileSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['created_at', 'updated_at', 'created_by', 'updated_by', 'verification_status']
 
+    # ... (Baki neeche ka poora code waisa hi rahega) ...
     # Fetch Children
     def get_children(self, obj):
         kids = SamajProfile.objects.filter(Q(father=obj) | Q(mother=obj)).distinct()
