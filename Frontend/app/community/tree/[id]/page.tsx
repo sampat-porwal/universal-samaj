@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Target, ArrowLeft, X, MapPin, Heart, User as UserIcon } from 'lucide-react';
+import { ArrowLeft, User as UserIcon, Network, ArrowRight, ArrowDown, X, MapPin, Heart } from 'lucide-react';
 import api from '@/lib/api';
 import Link from 'next/link';
 
@@ -32,26 +32,15 @@ export default function FamilyTreePage() {
     const [treeData, setTreeData] = useState<TreeNode | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    
-    // State for Dialog Box (Detailed Info)
     const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
 
-    // For mouse drag scrolling & Virtual Canvas
+    // Mouse Drag Scrolling
     const scrollRef = useRef<HTMLDivElement>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [startX, setStartX] = useState(0);
     const [scrollLeft, setScrollLeft] = useState(0);
     const [startY, setStartY] = useState(0);
     const [scrollTop, setScrollTop] = useState(0);
-
-    // 🌟 THE MAGIC: Auto-center the 5000px canvas on load
-    useEffect(() => {
-        if (treeData && scrollRef.current) {
-            const containerWidth = scrollRef.current.clientWidth;
-            // Scroll to the exact middle of the 5000px canvas
-            scrollRef.current.scrollLeft = (5000 - containerWidth) / 2;
-        }
-    }, [treeData]);
 
     useEffect(() => {
         fetchTreeData();
@@ -64,7 +53,7 @@ export default function FamilyTreePage() {
             setTreeData(res.data);
         } catch (err: any) {
             console.error("Failed to load tree", err);
-            setError("Failed to load Family Tree. Please check if the user exists.");
+            setError("Failed to load Family Tree.");
         } finally {
             setLoading(false);
         }
@@ -75,7 +64,6 @@ export default function FamilyTreePage() {
         return path.startsWith('http') ? path : `http://127.0.0.1:8000${path}`;
     };
 
-    // Mouse Drag Handlers
     const handleMouseDown = (e: React.MouseEvent) => {
         if (!scrollRef.current) return;
         setIsDragging(true);
@@ -90,193 +78,186 @@ export default function FamilyTreePage() {
         if (!isDragging || !scrollRef.current) return;
         e.preventDefault();
         const x = e.pageX - scrollRef.current.offsetLeft;
-        const walkX = (x - startX) * 2; 
-        scrollRef.current.scrollLeft = scrollLeft - walkX;
+        scrollRef.current.scrollLeft = scrollLeft - (x - startX) * 2;
         const y = e.pageY - scrollRef.current.offsetTop;
-        const walkY = (y - startY) * 2;
-        scrollRef.current.scrollTop = scrollTop - walkY;
+        scrollRef.current.scrollTop = scrollTop - (y - startY) * 2;
     };
 
     // =========================================================
-    // 🌟 THE BULLETPROOF LIST-BASED TREE NODE
+    // 🌟 THE VERTICAL COUPLE CARD (Top Husband, Bottom Wife)
     // =========================================================
-    const FamilyNode = ({ node, isRoot = false }: { node: TreeNode, isRoot?: boolean }) => {
-        const hasChildren = node.children && node.children.length > 0;
-        const [isExpanded, setIsExpanded] = useState(true);
-
+    const CoupleCard = ({ node, isRoot, isActive, onActivate }: { node: TreeNode, isRoot?: boolean, isActive?: boolean, onActivate: () => void }) => {
+        const spouse = node.spouses && node.spouses.length > 0 ? node.spouses[0] : null;
+        
+        // Colors & Borders based entirely on Gender (No text needed!)
         const isMale = node.gender === 'M';
         const borderColor = isMale ? 'border-blue-500' : 'border-pink-500';
-        const textColor = isMale ? 'text-blue-700' : 'text-pink-700';
-        const badgeBg = isMale ? 'bg-blue-100 text-blue-800' : 'bg-pink-100 text-pink-800';
+        const bgColor = isMale ? 'bg-blue-50/50' : 'bg-pink-50/50';
+        const rootShadow = isRoot ? 'shadow-lg border-[3px]' : 'shadow-sm border-[2px] hover:shadow-md hover:-translate-y-0.5';
 
         return (
-            <li>
-                {/* 🌟 Node UI Wrapper */}
-                <div className="org-node-wrapper inline-flex flex-col items-center relative group px-2 md:px-4">
-                    <div 
-                        onClick={() => setSelectedNode(node)} 
-                        className={`w-14 h-14 md:w-16 md:h-16 mx-auto rounded-full border-[3px] ${borderColor} shadow-lg flex items-center justify-center overflow-hidden bg-white cursor-pointer hover:scale-110 transition-transform relative z-10`}
-                    >
-                        {node.image ? (
-                            <img src={getImgUrl(node.image)} className="w-full h-full object-cover" alt="" onError={(e) => e.currentTarget.style.display = 'none'} />
-                        ) : (
-                            <span className={`font-black text-xl ${textColor}`}>{node.name?.charAt(0) || 'U'}</span>
-                        )}
-                        {isRoot && <div className="absolute bottom-0 bg-yellow-400 text-yellow-900 text-[8px] font-black uppercase w-full text-center py-0.5 tracking-widest">Root</div>}
+            <div className="flex flex-col items-center w-[90px] shrink-0 z-10 transition-all duration-300">
+                
+                {/* 👨‍👩‍👧 Card Body (Clicking card opens Dialog Profile) */}
+                <div 
+                    onClick={() => setSelectedNode(node)} 
+                    className={`w-[84px] bg-white rounded-xl ${borderColor} ${rootShadow} overflow-hidden flex flex-col cursor-pointer transition-all`}
+                >
+                    {/* Primary User (Top) */}
+                    <div className={`flex flex-col items-center p-1.5 ${bgColor}`}>
+                        <div className={`w-10 h-10 rounded-full border-[2.5px] ${borderColor} bg-white overflow-hidden shrink-0 flex items-center justify-center`}>
+                            {node.image ? <img src={getImgUrl(node.image)} className="w-full h-full object-cover"/> : <span className="font-bold text-gray-500 text-sm">{node.name.charAt(0)}</span>}
+                        </div>
+                        <span className="text-[10px] font-black text-gray-800 text-center truncate w-full mt-1 px-0.5" title={node.name}>{node.name.split(' ')[0]}</span>
                     </div>
 
-                    <div className="flex flex-col items-center mt-1.5 relative z-10">
-                        <span className="text-xs font-black text-gray-800 whitespace-nowrap text-center px-3 py-1 bg-white rounded-md shadow-sm border border-gray-100 mt-1 max-w-[120px] truncate" title={node.name}>
-                            {node.name.split(' ')[0]} 
-                        </span>
-                        {!isRoot && (
-                            <span className={`text-[8px] font-black uppercase tracking-widest mt-0.5 px-2 py-0.5 rounded-sm shadow-sm whitespace-nowrap ${badgeBg}`}>
-                                {isMale ? 'Son' : 'Daughter'}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Expand/Collapse Toggle */}
-                    {hasChildren && (
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
-                            className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-white border border-slate-400 text-slate-600 rounded-full w-5 h-5 flex items-center justify-center shadow-md hover:bg-slate-800 hover:text-white transition-colors z-20 cursor-pointer"
-                        >
-                            <span className="font-black text-xs leading-none mt-[-2px]">{isExpanded ? '-' : '+'}</span>
-                        </button>
+                    {/* Spouse User (Bottom) */}
+                    {spouse ? (
+                        <div className={`flex flex-col items-center p-1.5 border-t border-gray-200 ${spouse.gender === 'M' ? 'bg-blue-50/50' : 'bg-pink-50/50'}`}>
+                            <div className={`w-8 h-8 rounded-full border-[2px] ${spouse.gender === 'M' ? 'border-blue-400' : 'border-pink-400'} bg-white overflow-hidden shrink-0 flex items-center justify-center`}>
+                                {spouse.image ? <img src={getImgUrl(spouse.image)} className="w-full h-full object-cover"/> : <span className="font-bold text-gray-500 text-[10px]">{spouse.name.charAt(0)}</span>}
+                            </div>
+                            <span className="text-[9px] font-bold text-gray-600 text-center truncate w-full mt-1 px-0.5" title={spouse.name}>{spouse.name.split(' ')[0]}</span>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center p-2 border-t border-gray-100 bg-gray-50">
+                            <span className="text-[8px] font-bold text-gray-400 uppercase text-center leading-tight">No<br/>Spouse</span>
+                        </div>
                     )}
                 </div>
 
-                {/* 🌟 Sub-Tree (Children) */}
-                {hasChildren && isExpanded && (
-                    <ul>
-                        {node.children.map((child) => (
-                            <FamilyNode key={child.id} node={child} />
-                        ))}
-                    </ul>
+                {/* 🔘 Action Buttons (Icons Only) directly below */}
+                <div className="flex gap-1 mt-1.5 justify-center w-full">
+                    {/* Toggle Leg (Active) Button */}
+                    {node.children && node.children.length > 0 && (
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onActivate(); }} 
+                            className={`p-1.5 rounded-md border shadow-sm transition-colors ${isActive ? 'bg-slate-800 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-100'}`} 
+                            title={isActive ? "Close Leg" : "Open Leg"}
+                        >
+                            {isActive ? <ArrowDown size={14} strokeWidth={3} /> : <ArrowRight size={14} strokeWidth={3} />}
+                        </button>
+                    )}
+                    
+                    {/* Make Root Button */}
+                    {!isRoot && (
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); window.location.href = `/community/tree/${node.id}`; }} 
+                            className="p-1.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-md hover:bg-blue-100 shadow-sm" 
+                            title="Make Root"
+                        >
+                            <Network size={14} strokeWidth={2.5} />
+                        </button>
+                    )}
+
+                    {/* View Full Profile Button */}
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); router.push(`/community/directory/${node.id}`); }} 
+                        className="p-1.5 bg-gray-50 border border-gray-200 text-gray-700 rounded-md hover:bg-gray-100 shadow-sm" 
+                        title="View Profile"
+                    >
+                        <UserIcon size={14} strokeWidth={2.5} />
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
+    // =========================================================
+    // 🌟 PURE TAILWIND RECURSIVE WATERFALL (No Raw CSS Injection)
+    // =========================================================
+    const LevelRow = ({ nodes }: { nodes: TreeNode[] }) => {
+        // Find active node (defaults to the first node)
+        const [activeId, setActiveId] = useState<number | null>(nodes[0]?.id || null);
+
+        // Keep activeId valid if data changes
+        useEffect(() => {
+            if (nodes.length > 0 && !nodes.find(n => n.id === activeId)) {
+                setActiveId(nodes[0].id);
+            }
+        }, [nodes]);
+
+        // Left-Sort: Active node jumps to index 0
+        const sortedNodes = [...nodes].sort((a, b) => {
+            if (a.id === activeId) return -1;
+            if (b.id === activeId) return 1;
+            return 0;
+        });
+
+        const activeNode = sortedNodes[0];
+
+        return (
+            <div className="flex flex-col items-start relative w-max transition-all duration-500">
+                
+                {/* 🌟 1. ROW OF SIBLINGS */}
+                <div className="flex flex-row gap-[8px] relative pt-6 w-max">
+                    
+                    {/* Horizontal connector spanning from center of First child to center of Last child */}
+                    {sortedNodes.length > 1 && (
+                        <div className="absolute top-0 left-[45px] right-[45px] h-[2px] bg-slate-400 z-0"></div>
+                    )}
+
+                    {sortedNodes.map((node) => (
+                        <div key={node.id} className="relative flex flex-col items-center w-[90px] shrink-0">
+                            {/* Drop line from horizontal axis to node */}
+                            <div className="absolute top-0 left-[44px] w-[2px] h-6 bg-slate-400 -translate-y-full z-0"></div>
+                            
+                            <CoupleCard 
+                                node={node} 
+                                isActive={node.id === activeId} 
+                                onActivate={() => setActiveId(node.id === activeId ? null : node.id)} 
+                            />
+                        </div>
+                    ))}
+                </div>
+
+                {/* 🌟 2. CHILDREN OF ACTIVE NODE (Rendered strictly below the active node) */}
+                {activeNode && activeId && activeNode.children && activeNode.children.length > 0 && (
+                    <div className="relative mt-2 w-max animate-in fade-in slide-in-from-top-4 duration-300">
+                        {/* Vertical line dropping from active node to its children row */}
+                        <div className="w-[2px] h-6 bg-slate-400 ml-[44px] relative z-0">
+                            {/* Downward Arrow Head */}
+                            <div className="absolute bottom-[-2px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[6px] border-t-slate-400"></div>
+                        </div>
+                        
+                        {/* Recursive Call */}
+                        <LevelRow nodes={activeNode.children} />
+                    </div>
                 )}
-            </li>
+            </div>
         );
     };
 
     // =========================================================
     // 🌟 PAGE RENDER
     // =========================================================
-    if (loading) return <div className="p-20 text-center font-bold text-blue-500 animate-pulse text-xl">Generating Mathematical Graph...</div>;
+    if (loading) return <div className="p-20 text-center font-bold text-blue-500 animate-pulse text-xl">Loading Waterfall...</div>;
     
     if (error || !treeData) return (
         <div className="p-10 text-center flex flex-col items-center">
-            <div className="bg-red-50 text-red-600 p-6 rounded-2xl border border-red-200 font-bold max-w-md">
-                {error || "Tree not found"}
-            </div>
+            <div className="bg-red-50 text-red-600 p-6 rounded-2xl border border-red-200 font-bold max-w-md">{error}</div>
             <button onClick={() => router.back()} className="mt-4 bg-gray-200 px-6 py-2 rounded-xl font-bold">Go Back</button>
         </div>
     );
 
     return (
-        <div className="h-full flex flex-col bg-gray-100 font-sans relative overflow-hidden">
+        <div className="h-full flex flex-col bg-gray-50 font-sans relative overflow-hidden">
             
-            {/* 🌟 PURE CSS ORG-CHART STYLES */}
-            <style dangerouslySetInnerHTML={{
-                __html: `
-                .org-tree {
-                    display: inline-block;
-                }
-                .org-tree ul {
-                    padding-top: 30px; 
-                    position: relative;
-                    transition: all 0.5s;
-                    display: flex;
-                    flex-wrap: nowrap; 
-                    justify-content: center;
-                    padding-left: 0;
-                    margin: 0;
-                }
-                .org-tree li {
-                    text-align: center;
-                    list-style-type: none;
-                    position: relative;
-                    padding: 30px 5px 0 5px;
-                    transition: all 0.5s;
-                }
-                /* Horizontal connector lines */
-                .org-tree li::before, .org-tree li::after {
-                    content: '';
-                    position: absolute; top: 0; right: 50%;
-                    border-top: 2px solid #94a3b8;
-                    width: 50%; height: 30px;
-                    z-index: 0;
-                }
-                .org-tree li::after {
-                    right: auto; left: 50%;
-                    border-left: 2px solid #94a3b8;
-                }
-                /* Remove left/right lines from first/last child */
-                .org-tree li:only-child::after, .org-tree li:only-child::before {
-                    display: none;
-                }
-                .org-tree li:only-child { padding-top: 0; }
-                .org-tree li:first-child::before, .org-tree li:last-child::after {
-                    border: 0 none;
-                }
-                .org-tree li:last-child::before {
-                    border-right: 2px solid #94a3b8;
-                    border-radius: 0 4px 0 0;
-                }
-                .org-tree li:first-child::after {
-                    border-radius: 4px 0 0 0;
-                }
-                /* Downward line from parent */
-                .org-tree ul ul::before {
-                    content: '';
-                    position: absolute; top: 0; left: 50%;
-                    border-left: 2px solid #94a3b8;
-                    width: 0; height: 30px;
-                    transform: translateX(-50%);
-                    z-index: 0;
-                }
-                /* Add Downward Arrow Head */
-                .org-node-wrapper::before {
-                    content: '';
-                    position: absolute;
-                    top: -30px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    border-left: 6px solid transparent;
-                    border-right: 6px solid transparent;
-                    border-top: 6px solid #94a3b8;
-                    display: none;
-                    z-index: 1;
-                }
-                /* Show arrow only if it's not the root */
-                .org-tree ul ul li > .org-node-wrapper::before {
-                    display: block;
-                }
-            `}} />
-
-            {/* 🌟 DIALOG BOX (POP-UP) FOR DETAILED INFO */}
+            {/* 🌟 DIALOG BOX FOR DETAILS */}
             {selectedNode && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
                     <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
                         <div className={`h-24 ${selectedNode.gender === 'M' ? 'bg-blue-600' : 'bg-pink-600'} relative flex justify-end p-4`}>
-                            <button onClick={() => setSelectedNode(null)} className="bg-black/20 hover:bg-black/40 text-white rounded-full p-1.5 backdrop-blur-md h-fit transition">
-                                <X size={20} />
-                            </button>
+                            <button onClick={() => setSelectedNode(null)} className="bg-black/20 hover:bg-black/40 text-white rounded-full p-1.5 backdrop-blur-md h-fit transition"><X size={20} /></button>
                             <div className={`absolute -bottom-10 left-6 w-20 h-20 rounded-full border-[4px] border-white shadow-lg flex items-center justify-center overflow-hidden bg-white ${selectedNode.gender === 'M' ? 'text-blue-600' : 'text-pink-600'}`}>
-                                {selectedNode.image ? (
-                                    <img src={getImgUrl(selectedNode.image)} className="w-full h-full object-cover" alt="" onError={(e) => e.currentTarget.style.display = 'none'} />
-                                ) : (
-                                    <span className="font-black text-3xl">{selectedNode.name?.charAt(0)}</span>
-                                )}
+                                {selectedNode.image ? <img src={getImgUrl(selectedNode.image)} className="w-full h-full object-cover" alt="" /> : <span className="font-black text-3xl">{selectedNode.name?.charAt(0)}</span>}
                             </div>
                         </div>
 
                         <div className="pt-12 px-6 pb-6">
                             <h2 className="text-2xl font-black text-gray-900">{selectedNode.name}</h2>
                             <div className="flex items-center gap-2 mt-1 mb-4">
-                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${selectedNode.gender === 'M' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'}`}>
-                                    {selectedNode.gender === 'M' ? 'Male' : 'Female'}
-                                </span>
+                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${selectedNode.gender === 'M' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'}`}>{selectedNode.gender === 'M' ? 'Male' : 'Female'}</span>
                                 <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">ID: {selectedNode.samaj_id}</span>
                             </div>
 
@@ -285,33 +266,14 @@ export default function FamilyTreePage() {
                                     <MapPin size={16} className="text-gray-400" />
                                     <span className="font-bold">Gotra/Origin:</span> {selectedNode.gotra || 'Not Specified'}
                                 </div>
-                                
-                                {selectedNode.spouses && selectedNode.spouses.length > 0 && (
-                                    <div className="pt-3 border-t border-gray-200 mt-2">
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1"><Heart size={12}/> Spouse(s)</p>
-                                        <div className="flex flex-col gap-2">
-                                            {selectedNode.spouses.map((spouse, idx) => (
-                                                <div key={idx} className={`flex items-center gap-3 bg-white p-2 rounded-xl border ${spouse.gender === 'F' ? 'border-pink-200' : 'border-blue-200'} shadow-sm`}>
-                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0 overflow-hidden ${spouse.gender === 'F' ? 'bg-pink-400' : 'bg-blue-400'}`}>
-                                                        {spouse.image ? <img src={getImgUrl(spouse.image)} className="w-full h-full object-cover" alt=""/> : spouse.name?.charAt(0)}
-                                                    </div>
-                                                    <span className="text-sm font-bold text-gray-800">{spouse.name}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
                             </div>
 
                             <div className="flex gap-3">
                                 <button 
-                                    onClick={() => {
-                                        router.push(`/community/tree/${selectedNode.id}`);
-                                        setSelectedNode(null);
-                                    }}
+                                    onClick={() => { window.location.href = `/community/tree/${selectedNode.id}`; }}
                                     className="flex-1 bg-gray-900 hover:bg-black text-white font-black py-3 rounded-xl flex items-center justify-center gap-2 transition shadow-md"
                                 >
-                                    <Target size={18}/> Make Root
+                                    <Network size={18}/> Make Root
                                 </button>
                                 <Link 
                                     href={`/community/directory/${selectedNode.id}`}
@@ -325,26 +287,23 @@ export default function FamilyTreePage() {
                 </div>
             )}
 
-
             {/* TOP CONTROL PANEL */}
             <div className="bg-white border-b border-gray-200 p-4 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4 z-20 shrink-0">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => router.back()} className="bg-gray-100 p-2 rounded-full hover:bg-gray-200 transition text-gray-600">
-                        <ArrowLeft size={20} />
-                    </button>
+                    <button onClick={() => router.back()} className="bg-gray-100 p-2 rounded-full hover:bg-gray-200 transition text-gray-600"><ArrowLeft size={20} /></button>
                     <div>
                         <h1 className="text-xl md:text-2xl font-black text-gray-900 flex items-center gap-2">
-                            Family Hierarchy <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-md ml-2 border border-blue-200">5 Levels</span>
+                            Waterfall Tree <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-md ml-2 border border-blue-200">Compact</span>
                         </h1>
                         <p className="text-sm text-gray-500 font-bold">Viewing origin point: <span className="text-blue-600">{treeData.name}</span></p>
                     </div>
                 </div>
-                <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs font-bold px-4 py-2 rounded-xl shadow-sm">
-                    🖱️ <strong>Click & Drag</strong> anywhere to move around the tree.
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold px-4 py-2 rounded-xl shadow-sm">
+                    🖱️ <strong>Click [▶] Icon</strong> to shift a branch to the Left!
                 </div>
             </div>
 
-            {/* 🌟 5000px INFINITE CANVAS (The Ultimate Fix for Left-Cutoff) */}
+            {/* 🌟 THE CANVAS: strictly items-start (Left Aligned Waterfall) */}
             <div 
                 ref={scrollRef}
                 onMouseDown={handleMouseDown}
@@ -354,13 +313,24 @@ export default function FamilyTreePage() {
                 className={`flex-1 overflow-auto bg-[#f8fafc] custom-scrollbar relative ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`} 
                 style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}
             >
-                {/* A massive 5000px wide wrapper. JavaScript auto-scrolls to the exact center on load. */}
-                <div className="w-[5000px] flex justify-center pt-10 pb-32">
-                    <div className="org-tree">
-                        <ul>
-                            <FamilyNode node={treeData} isRoot={true} />
-                        </ul>
+                <div className="min-w-full w-max flex flex-col items-start p-6 sm:p-10 pb-32">
+                    
+                    {/* MASTER ROOT */}
+                    <div className="relative flex flex-col items-center w-[90px]">
+                        <CoupleCard node={treeData} isRoot={true} isActive={true} onActivate={() => {}} />
                     </div>
+
+                    {/* RENDER ENTIRE CHILDREN WATERFALL */}
+                    {treeData.children && treeData.children.length > 0 && (
+                        <div className="relative mt-2 w-max">
+                            <div className="w-[2px] h-6 bg-slate-400 ml-[44px] relative z-0">
+                                {/* Downward Arrow to 1st Generation */}
+                                <div className="absolute bottom-[-2px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[6px] border-t-slate-400"></div>
+                            </div>
+                            <LevelRow nodes={treeData.children} />
+                        </div>
+                    )}
+                    
                 </div>
             </div>
 
