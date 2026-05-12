@@ -72,6 +72,7 @@ export default function FamilyTreePage() {
         return path.startsWith('http') ? path : `http://127.0.0.1:8000${path}`;
     };
 
+    // Drag to scroll logic
     const handleMouseDown = (e: React.MouseEvent) => {
         if (!scrollRef.current) return;
         setIsDragging(true);
@@ -106,8 +107,11 @@ export default function FamilyTreePage() {
             <div className="flex flex-col items-center shrink-0 z-10 transition-all duration-300" style={{ width: '130px' }}>
                 
                 {/* 👨‍👩‍👧 1. CARD BODY (STRICTLY FIXED HEIGHT & WIDTH) */}
+                {/* 🌟 onMouseDown stopPropagation fixes the drag bug! */}
                 <div 
                     onClick={() => setSelectedNode(node)} 
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                     className={`bg-white rounded-xl ${cardBorder} flex flex-col cursor-pointer transition-all shrink-0`}
                     style={{ width: '130px', height: '140px', minWidth: '130px', minHeight: '140px', maxWidth: '130px', maxHeight: '140px', overflow: 'hidden' }}
                 >
@@ -148,14 +152,19 @@ export default function FamilyTreePage() {
                     )}
                 </div>
 
-                {/* 🔘 2. ALWAYS 3 BUTTONS (Fixed Clicks & Z-Index) */}
-                <div className="flex gap-1.5 mt-2 justify-center w-full relative z-50">
+                {/* 🔘 2. ALWAYS 3 BUTTONS (stopPropogation guarantees clicks work) */}
+                <div 
+                    className="flex gap-1.5 mt-2 justify-center w-full relative z-50 pointer-events-auto"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                >
                     
                     {/* Button 1: Toggle Leg / Dead End (X) */}
                     <button 
                         type="button"
                         onClick={(e) => { 
-                            e.preventDefault(); e.stopPropagation(); 
+                            e.preventDefault(); 
+                            e.stopPropagation(); 
                             if (hasChildren) onActivate(); 
                         }} 
                         className={`flex items-center justify-center w-8 h-8 rounded-md border shadow-sm transition-colors cursor-pointer ${
@@ -166,9 +175,9 @@ export default function FamilyTreePage() {
                         title={!hasChildren ? "No Branches" : isActive ? "Active Leg" : "Open Leg"}
                     >
                         <span className="pointer-events-none flex items-center justify-center">
-                            {!hasChildren ? <X size={16} strokeWidth={3} /> :
-                             isActive ? <ArrowDown size={16} strokeWidth={3} /> :
-                             <ArrowRight size={16} strokeWidth={3} />}
+                            {!hasChildren ? <X size={18} strokeWidth={3} /> :
+                             isActive ? <ArrowDown size={18} strokeWidth={3} /> :
+                             <ArrowRight size={18} strokeWidth={3} />}
                         </span>
                     </button>
                     
@@ -176,7 +185,8 @@ export default function FamilyTreePage() {
                     <button 
                         type="button"
                         onClick={(e) => { 
-                            e.preventDefault(); e.stopPropagation(); 
+                            e.preventDefault(); 
+                            e.stopPropagation(); 
                             window.location.href = `/community/tree/${node.id}`; 
                         }} 
                         className="flex items-center justify-center w-8 h-8 bg-blue-50 border border-blue-200 text-blue-700 rounded-md hover:bg-blue-100 shadow-sm cursor-pointer" 
@@ -191,7 +201,8 @@ export default function FamilyTreePage() {
                     <button 
                         type="button"
                         onClick={(e) => { 
-                            e.preventDefault(); e.stopPropagation(); 
+                            e.preventDefault(); 
+                            e.stopPropagation(); 
                             router.push(`/community/directory/${node.id}`); 
                         }} 
                         className="flex items-center justify-center w-8 h-8 bg-gray-50 border border-gray-200 text-gray-700 rounded-md hover:bg-gray-100 shadow-sm cursor-pointer" 
@@ -207,7 +218,7 @@ export default function FamilyTreePage() {
     };
 
     // =========================================================
-    // 🌟 LEFT-SORTING WATERFALL & DARKER LINES
+    // 🌟 LEFT-SORTING WATERFALL & DARKER LINES (Fixed Gaps)
     // =========================================================
     const LevelRow = ({ nodes }: { nodes: TreeNode[] }) => {
         const [activeId, setActiveId] = useState<number | null>(nodes[0]?.id || null);
@@ -218,7 +229,7 @@ export default function FamilyTreePage() {
             }
         }, [nodes]);
 
-        // Left-Sort
+        // Left-Sort (Active node strictly at index 0)
         const activeNode = nodes.find(n => n.id === activeId) || nodes[0];
         const otherNodes = nodes.filter(n => n.id !== activeNode?.id);
         const sortedNodes = activeNode ? [activeNode, ...otherNodes] : [];
@@ -229,8 +240,8 @@ export default function FamilyTreePage() {
         return (
             <div className="flex flex-col items-start relative w-max transition-all duration-500">
                 
-                {/* 🌟 1. ROW OF SIBLINGS (5px Gap) */}
-                <div className="flex flex-row gap-[5px] relative pt-[28px] w-max">
+                {/* 🌟 1. ROW OF SIBLINGS (Strict 10px Gap fixes overlapping) */}
+                <div className="flex flex-row relative pt-[28px] w-max" style={{ gap: '10px' }}>
                     
                     {/* Horizontal connector line (DARKER bg-slate-700, THICKER h-[3px]) */}
                     {sortedNodes.length > 1 && (
