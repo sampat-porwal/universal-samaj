@@ -42,11 +42,11 @@ export default function FamilyTreePage() {
     const [startY, setStartY] = useState(0);
     const [scrollTop, setScrollTop] = useState(0);
 
-    // Auto-center the massive canvas on load
+    // Start at Top-Left since it's a Waterfall Left-Aligned Tree
     useEffect(() => {
         if (treeData && scrollRef.current) {
-            const containerWidth = scrollRef.current.clientWidth;
-            scrollRef.current.scrollLeft = (10000 - containerWidth) / 2;
+            scrollRef.current.scrollLeft = 0;
+            scrollRef.current.scrollTop = 0;
         }
     }, [treeData]);
 
@@ -92,8 +92,25 @@ export default function FamilyTreePage() {
         scrollRef.current.scrollTop = scrollTop - (y - startY) * 2;
     };
 
+    // 🌟 SMART NAME FORMATTER (Removes 'Suwalka' & adds (S)/(D)/(H)/(W))
+    const getDisplayName = (name: string, gender: string, isSpouse: boolean = false) => {
+        if (!name) return '';
+        // Remove "Suwalka" (case-insensitive) globally from the string
+        let cleanName = name.replace(/suwalka/gi, '').trim();
+        
+        // Add relation suffix
+        let suffix = '';
+        if (!isSpouse) {
+            suffix = gender === 'M' ? '(S)' : '(D)';
+        } else {
+            suffix = gender === 'M' ? '(H)' : '(W)';
+        }
+        
+        return `${cleanName} ${suffix}`;
+    };
+
     // =========================================================
-    // 🌟 STRICT VERTICAL COUPLE CARD (Fixed 130x140 size)
+    // 🌟 STRICT VERTICAL COUPLE CARD (130x140 fixed, Smart Names)
     // =========================================================
     const CoupleCard = ({ node, isRoot, isActive, onActivate }: { node: TreeNode, isRoot?: boolean, isActive?: boolean, onActivate: () => void }) => {
         const spouse = node.spouses && node.spouses.length > 0 ? node.spouses[0] : null;
@@ -106,8 +123,7 @@ export default function FamilyTreePage() {
         return (
             <div className="flex flex-col items-center shrink-0 z-10 transition-all duration-300" style={{ width: '130px' }}>
                 
-                {/* 👨‍👩‍👧 1. CARD BODY (STRICTLY FIXED HEIGHT & WIDTH) */}
-                {/* 🌟 onMouseDown stopPropagation fixes the drag bug! */}
+                {/* 👨‍👩‍👧 1. CARD BODY (Clicks Propagate Fixed) */}
                 <div 
                     onClick={() => setSelectedNode(node)} 
                     onMouseDown={(e) => e.stopPropagation()}
@@ -116,10 +132,10 @@ export default function FamilyTreePage() {
                     style={{ width: '130px', height: '140px', minWidth: '130px', minHeight: '140px', maxWidth: '130px', maxHeight: '140px', overflow: 'hidden' }}
                 >
                     {/* Primary User (Top Half - Exactly 70px) */}
-                    <div className="flex flex-col items-center justify-center p-2 bg-gray-50/40 shrink-0" style={{ height: '70px', minHeight: '70px' }}>
+                    <div className="flex flex-col items-center justify-center p-1 bg-gray-50/40 shrink-0" style={{ height: '70px', minHeight: '70px' }}>
                         <div 
                             className={`rounded-full border-[2px] ${borderColor} bg-white flex items-center justify-center shrink-0 overflow-hidden`}
-                            style={{ width: '42px', height: '42px', minWidth: '42px', minHeight: '42px' }}
+                            style={{ width: '40px', height: '40px', minWidth: '40px', minHeight: '40px' }}
                         >
                             {node.image ? (
                                 <img src={getImgUrl(node.image)} alt={node.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -127,12 +143,15 @@ export default function FamilyTreePage() {
                                 <span className="font-bold text-gray-400 text-lg">{node.name.charAt(0)}</span>
                             )}
                         </div>
-                        <span className="text-xs font-black text-gray-800 text-center truncate w-full mt-1 px-1 leading-tight" title={node.name}>{node.name.split(' ')[0]}</span>
+                        {/* 🌟 Smart Name Applied - with truncate to prevent text overflow */}
+                        <span className="text-[11px] font-black text-gray-800 text-center truncate w-full mt-1 px-1 leading-tight" title={node.name}>
+                            {getDisplayName(node.name, node.gender, false)}
+                        </span>
                     </div>
 
                     {/* Spouse User (Bottom Half - Exactly 70px) */}
                     {spouse ? (
-                        <div className={`flex flex-col items-center justify-center p-2 border-t border-gray-200 bg-gray-50/40 shrink-0`} style={{ height: '70px', minHeight: '70px' }}>
+                        <div className={`flex flex-col items-center justify-center p-1 border-t border-gray-200 bg-gray-50/40 shrink-0`} style={{ height: '70px', minHeight: '70px' }}>
                             <div 
                                 className={`rounded-full border-[2px] ${spouse.gender === 'M' ? 'border-blue-400' : 'border-pink-400'} bg-white flex items-center justify-center shrink-0 overflow-hidden`}
                                 style={{ width: '34px', height: '34px', minWidth: '34px', minHeight: '34px' }}
@@ -143,22 +162,24 @@ export default function FamilyTreePage() {
                                     <span className="font-bold text-gray-400 text-xs">{spouse.name.charAt(0)}</span>
                                 )}
                             </div>
-                            <span className="text-[10px] font-bold text-gray-600 text-center truncate w-full mt-1 px-1 leading-tight" title={spouse.name}>{spouse.name.split(' ')[0]}</span>
+                            {/* 🌟 Smart Spouse Name Applied */}
+                            <span className="text-[10px] font-bold text-gray-600 text-center truncate w-full mt-1 px-1 leading-tight" title={spouse.name}>
+                                {getDisplayName(spouse.name, spouse.gender, true)}
+                            </span>
                         </div>
                     ) : (
-                        <div className="flex flex-col items-center justify-center p-2 border-t border-gray-100 bg-gray-100/50 shrink-0" style={{ height: '70px', minHeight: '70px' }}>
+                        <div className="flex flex-col items-center justify-center p-1 border-t border-gray-100 bg-gray-100/50 shrink-0" style={{ height: '70px', minHeight: '70px' }}>
                             <span className="text-[9px] font-bold text-gray-400 uppercase text-center leading-tight">No<br/>Spouse</span>
                         </div>
                     )}
                 </div>
 
-                {/* 🔘 2. ALWAYS 3 BUTTONS (stopPropogation guarantees clicks work) */}
+                {/* 🔘 2. ALWAYS 3 BUTTONS (Bulletproof Clicks) */}
                 <div 
                     className="flex gap-1.5 mt-2 justify-center w-full relative z-50 pointer-events-auto"
                     onMouseDown={(e) => e.stopPropagation()}
                     onTouchStart={(e) => e.stopPropagation()}
                 >
-                    
                     {/* Button 1: Toggle Leg / Dead End (X) */}
                     <button 
                         type="button"
@@ -218,7 +239,7 @@ export default function FamilyTreePage() {
     };
 
     // =========================================================
-    // 🌟 LEFT-SORTING WATERFALL & DARKER LINES (Fixed Gaps)
+    // 🌟 LEFT-SORTING WATERFALL & DARKER LINES (10px Gap)
     // =========================================================
     const LevelRow = ({ nodes }: { nodes: TreeNode[] }) => {
         const [activeId, setActiveId] = useState<number | null>(nodes[0]?.id || null);
@@ -229,21 +250,21 @@ export default function FamilyTreePage() {
             }
         }, [nodes]);
 
-        // Left-Sort (Active node strictly at index 0)
+        // Left-Sort
         const activeNode = nodes.find(n => n.id === activeId) || nodes[0];
         const otherNodes = nodes.filter(n => n.id !== activeNode?.id);
         const sortedNodes = activeNode ? [activeNode, ...otherNodes] : [];
 
-        // Exact math for 130px cards to perfectly center the 3px thick line
+        // Exact math for 130px cards
         const centerOffset = 65; 
 
         return (
             <div className="flex flex-col items-start relative w-max transition-all duration-500">
                 
-                {/* 🌟 1. ROW OF SIBLINGS (Strict 10px Gap fixes overlapping) */}
+                {/* 🌟 1. ROW OF SIBLINGS (10px Gap) */}
                 <div className="flex flex-row relative pt-[28px] w-max" style={{ gap: '10px' }}>
                     
-                    {/* Horizontal connector line (DARKER bg-slate-700, THICKER h-[3px]) */}
+                    {/* Horizontal connector line (Darker & Thicker) */}
                     {sortedNodes.length > 1 && (
                         <div 
                             className="absolute top-0 h-[3px] bg-slate-700 z-0"
@@ -253,7 +274,7 @@ export default function FamilyTreePage() {
 
                     {sortedNodes.map((node) => (
                         <div key={node.id} className="relative flex flex-col items-center w-[130px] shrink-0">
-                            {/* Drop line from horizontal axis down to the node */}
+                            {/* Drop line */}
                             <div 
                                 className="absolute top-0 w-[3px] h-[28px] bg-slate-700 -translate-y-full z-0 -translate-x-1/2"
                                 style={{ left: `${centerOffset}px` }}
@@ -271,12 +292,11 @@ export default function FamilyTreePage() {
                 {/* 🌟 2. CHILDREN OF ACTIVE NODE */}
                 {activeNode && activeNode.children && activeNode.children.length > 0 && (
                     <div className="relative mt-[4px] w-max animate-in fade-in slide-in-from-top-4 duration-300">
-                        {/* Vertical line dropping from active node to its children row */}
+                        {/* Vertical line dropping from active node */}
                         <div 
                             className="w-[3px] h-[28px] bg-slate-700 relative z-0 -translate-x-1/2"
                             style={{ marginLeft: `${centerOffset}px` }}
                         >
-                            {/* Downward Arrow pointing to the first child */}
                             <div className="absolute bottom-[-2px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-slate-700"></div>
                         </div>
                         
@@ -359,38 +379,40 @@ export default function FamilyTreePage() {
                     </div>
                 </div>
                 <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold px-4 py-2 rounded-xl shadow-sm flex items-center gap-2">
-                    🖱️ Click <ArrowRight size={14} className="inline bg-white border rounded shadow-sm" /> to shift a branch Left!
+                    🖱️ Drag to scroll. Click <ArrowRight size={14} className="inline bg-white border rounded shadow-sm" /> to shift a branch!
                 </div>
             </div>
 
-            {/* 🌟 THE CANVAS (Left Aligned Waterfall) */}
-            <div 
-                ref={scrollRef}
-                onMouseDown={handleMouseDown}
-                onMouseLeave={handleMouseLeave}
-                onMouseUp={handleMouseUp}
-                onMouseMove={handleMouseMove}
-                className={`flex-1 overflow-auto bg-[#f8fafc] custom-scrollbar relative ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`} 
-                style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}
-            >
-                <div className="min-w-full w-max flex flex-col items-start p-6 sm:p-10 pb-32">
-                    
-                    {/* MASTER ROOT (Starts exactly at the Left) */}
-                    <div className="relative flex flex-col items-center w-[130px] shrink-0 z-10">
-                        <CoupleCard node={treeData} isRoot={true} isActive={true} onActivate={() => {}} />
-                    </div>
-
-                    {/* RENDER ENTIRE CHILDREN WATERFALL */}
-                    {treeData.children && treeData.children.length > 0 && (
-                        <div className="relative mt-[4px] w-max">
-                            <div className="w-[3px] h-[28px] bg-slate-700 ml-[65px] relative z-0 -translate-x-1/2">
-                                {/* Downward Arrow pointing to 1st Generation */}
-                                <div className="absolute bottom-[-2px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-slate-700"></div>
-                            </div>
-                            <LevelRow nodes={treeData.children} />
+            {/* 🌟 THE CANVAS (Perfect Vertical & Horizontal Scroll Guaranteed!) */}
+            <div className="flex-1 relative w-full h-full overflow-hidden bg-[#f8fafc]">
+                <div 
+                    ref={scrollRef}
+                    onMouseDown={handleMouseDown}
+                    onMouseLeave={handleMouseLeave}
+                    onMouseUp={handleMouseUp}
+                    onMouseMove={handleMouseMove}
+                    className={`absolute inset-0 overflow-auto custom-scrollbar ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`} 
+                    style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}
+                >
+                    {/* pb-[800px] guarantees you can scroll down infinitely as levels increase! */}
+                    <div className="min-w-full w-max min-h-max flex flex-col items-start p-6 sm:p-10 pb-[800px] pr-[800px]">
+                        
+                        {/* MASTER ROOT */}
+                        <div className="relative flex flex-col items-center w-[130px] shrink-0 z-10">
+                            <CoupleCard node={treeData} isRoot={true} isActive={true} onActivate={() => {}} />
                         </div>
-                    )}
-                    
+
+                        {/* RENDER ENTIRE CHILDREN WATERFALL */}
+                        {treeData.children && treeData.children.length > 0 && (
+                            <div className="relative mt-[4px] w-max">
+                                <div className="w-[3px] h-[28px] bg-slate-700 ml-[65px] relative z-0 -translate-x-1/2">
+                                    <div className="absolute bottom-[-2px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-slate-700"></div>
+                                </div>
+                                <LevelRow nodes={treeData.children} />
+                            </div>
+                        )}
+                        
+                    </div>
                 </div>
             </div>
 
