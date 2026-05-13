@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, User as UserIcon, Network, ArrowRight, ArrowDown, X, MapPin, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ArrowUp, User as UserIcon, Network, ArrowRight, ArrowDown, X, MapPin } from 'lucide-react';
 import api from '@/lib/api';
 import Link from 'next/link';
 
@@ -330,6 +330,8 @@ export default function FamilyTreePage() {
     const [loading,      setLoading]      = useState(true);
     const [error,        setError]        = useState('');
     const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
+    // Parent node info — fetched separately so we can show UP arrow on root
+    const [parentNode,   setParentNode]   = useState<{ id: number; name: string } | null>(null);
 
     // ── Smooth drag-to-scroll (native DOM events – no React synthetic event lag) ──
     const scrollRef  = useRef<HTMLDivElement>(null);
@@ -435,6 +437,28 @@ export default function FamilyTreePage() {
             };
 
             setTreeData(findNode(res.data) ?? res.data);
+
+            // ── Fetch parent info (father or mother of current root) ──────────
+            // router.register(r'profiles', SamajProfileViewSet) → /samaj/profiles/{id}/
+            // father & mother come as full FamilyMemberSerializer objects with nested user
+            try {
+                const profileRes = await api.get(`/samaj/profiles/${profileId}/`);
+                const d = profileRes.data;
+
+                const extractParent = (p: any) => {
+                    if (!p) return null;
+                    const firstName = p.user?.first_name || '';
+                    const lastName  = p.user?.last_name  || '';
+                    const name = `${firstName} ${lastName}`.trim() || p.user?.username || 'Parent';
+                    return { id: p.id as number, name };
+                };
+
+                // Prefer father, fallback to mother
+                const parent = extractParent(d.father) ?? extractParent(d.mother) ?? null;
+                setParentNode(parent);
+            } catch {
+                setParentNode(null); // Silently ignore — UP arrow just won't show
+            }
         } catch (err: any) {
             console.error(err);
             setError('Failed to load Family Tree.');
@@ -566,6 +590,56 @@ export default function FamilyTreePage() {
                         so the deepest level cards + buttons are fully reachable.
                     */}
                     <div style={{ display: 'inline-block', minWidth: '100%', padding: '40px 40px 0 40px' }}>
+
+                        {/* ── UP arrow: go to parent root (only if parent exists) ── */}
+                        {parentNode && (
+                            <div style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                width: CARD_W,
+                                marginBottom: 0,
+                            }}>
+                                <button
+                                    onMouseDown={e => e.stopPropagation()}
+                                    onTouchStart={e => e.stopPropagation()}
+                                    onClick={() => { window.location.href = `/community/tree/${parentNode.id}`; }}
+                                    title={`Go up to: ${parentNode.name}`}
+                                    style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        gap: 2,
+                                        background: 'white',
+                                        border: '2px solid #6366f1',
+                                        borderRadius: 10,
+                                        padding: '4px 10px',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 2px 8px rgba(99,102,241,0.15)',
+                                        transition: 'all 0.15s',
+                                        minWidth: 90,
+                                    }}
+                                >
+                                    <ArrowUp size={16} color="#6366f1" strokeWidth={3} />
+                                    <span style={{
+                                        fontSize: 9,
+                                        fontWeight: 800,
+                                        color: '#6366f1',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.04em',
+                                        maxWidth: 86,
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        textAlign: 'center',
+                                    }}>
+                                        {parentNode.name.replace(/suwalka/gi, '').trim()}
+                                    </span>
+                                </button>
+                                {/* Vertical stem connecting UP button to root card */}
+                                <div style={{ width: 3, height: 16, background: '#6366f1', borderRadius: 2 }} />
+                            </div>
+                        )}
 
                         {/* Root card */}
                         <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', width: CARD_W }}>
