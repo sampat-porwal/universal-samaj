@@ -48,9 +48,121 @@ const getDisplayName = (name: string, gender: string, isSpouse = false) => {
 const CARD_W   = 130;   // px – card width
 const CARD_H   = 140;   // px – card height (both halves)
 const CARD_GAP = 10;    // px – horizontal gap between siblings
-const BTN_H    = 36;    // px – button row height below card
+const BTN_H    = 44;    // px – button row height (32px button + 8px mt-2 + 4px buffer)
 const V_STEM   = 28;    // px – vertical connector height
 const CENTER   = 65;    // px – horizontal center of a card (CARD_W / 2)
+// Total vertical space a card+buttons takes before the connector line starts
+const CARD_TOTAL_H = CARD_H + BTN_H; // 184px
+
+// ─── ChildrenTooltipBox ───────────────────────────────────────────────────────
+const ChildrenTooltipBox: React.FC<{ kids: TreeNode[] }> = ({ kids }) => {
+    if (!kids || kids.length === 0) return null;
+
+    return (
+        <div
+            onMouseDown={e => e.stopPropagation()}
+            style={{
+                // Floats ABOVE the card, anchored at top-right corner (3px overlap)
+                // "bottom: 100%" means the tooltip's bottom edge = card's top edge
+                // Then we pull it down 3px so it overlaps the card top-right corner
+                position: 'absolute',
+                bottom: 'calc(100% - 3px)',  // 3px overlap below tooltip = touching card top
+                left: CARD_W - 3,            // 3px overlap on right edge of card
+                zIndex: 99999,
+                background: 'white',
+                border: '2px solid #cbd5e1',
+                // Sharp bottom-left corner (touching card), rounded everywhere else
+                borderRadius: '12px 12px 12px 4px',
+                boxShadow: '0 -4px 20px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.08)',
+                padding: '10px 12px',
+                pointerEvents: 'none',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                minWidth: 'max-content',
+            }}
+        >
+            {/* Header */}
+            <div style={{
+                fontSize: 9, fontWeight: 900, color: '#94a3b8',
+                textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'center',
+            }}>
+                {kids.length} Child{kids.length !== 1 ? 'ren' : ''}
+            </div>
+
+            {/* Horizontal row of child mini-cards */}
+            <div style={{ display: 'flex', flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
+                {kids.map(kid => {
+                    const isMale    = kid.gender === 'M';
+                    const accent    = isMale ? '#3b82f6' : '#ec4899';
+                    const bgColor   = isMale ? '#eff6ff' : '#fdf2f8';
+                    const border    = isMale ? '#bfdbfe' : '#fbcfe8';
+                    const cleanName = kid.name.replace(/suwalka/gi, '').trim();
+                    const suffix    = isMale ? '(S)' : '(D)';
+                    const kidSpouse = kid.spouses?.[0];
+
+                    return (
+                        <div key={kid.id} style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            gap: 4, padding: '8px 6px 6px',
+                            borderRadius: 12, background: bgColor,
+                            border: `1.5px solid ${border}`,
+                            minWidth: 60, maxWidth: 70,
+                        }}>
+                            {/* Avatar */}
+                            <div style={{
+                                width: 38, height: 38, borderRadius: '50%',
+                                border: `2.5px solid ${accent}`, background: 'white',
+                                overflow: 'hidden', display: 'flex',
+                                alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                boxShadow: `0 2px 6px ${accent}33`,
+                            }}>
+                                {kid.image
+                                    ? <img src={getImgUrl(kid.image)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
+                                    : <span style={{ fontSize: 15, fontWeight: 900, color: accent }}>{cleanName.charAt(0).toUpperCase()}</span>
+                                }
+                            </div>
+
+                            {/* Name + suffix */}
+                            <div style={{
+                                fontSize: 10, fontWeight: 800, color: '#1e293b',
+                                textAlign: 'center', lineHeight: 1.2, maxWidth: 62, wordBreak: 'break-word',
+                            }}>
+                                {cleanName.split(' ')[0]}
+                                <br />
+                                <span style={{ color: accent, fontSize: 9 }}>{suffix}</span>
+                            </div>
+
+                            {/* Spouse */}
+                            {kidSpouse && (
+                                <div style={{
+                                    fontSize: 8, fontWeight: 700, color: '#64748b',
+                                    textAlign: 'center', borderTop: '1px solid #e2e8f0',
+                                    paddingTop: 3, width: '100%',
+                                    maxWidth: 62, overflow: 'hidden',
+                                    textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                }}>
+                                    +{kidSpouse.name.replace(/suwalka/gi, '').trim().split(' ')[0]}
+                                </div>
+                            )}
+
+                            {/* Grandchildren badge */}
+                            {(kid.children?.length ?? 0) > 0 && (
+                                <div style={{
+                                    fontSize: 7, fontWeight: 800, color: 'white',
+                                    background: accent, borderRadius: 20,
+                                    padding: '1px 6px', lineHeight: 1.6,
+                                }}>
+                                    {kid.children.length} ↓
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
 
 // ─── CoupleCard ──────────────────────────────────────────────────────────────
 interface CoupleCardProps {
@@ -75,10 +187,24 @@ const CoupleCard: React.FC<CoupleCardProps> = ({
     const borderWidth = isRoot ? 'border-[3px]' : 'border-[2px]';
     const shadow = isRoot ? 'shadow-md' : 'shadow-sm hover:shadow-md';
 
+    // Tooltip: show children preview when hovering a COLLAPSED node that HAS children
+    const [hovering, setHovering] = useState(false);
+    const showTooltip = hovering && hasChildren && !expanded;
+
     return (
         <div
-            className="flex flex-col items-center shrink-0"
-            style={{ width: CARD_W }}
+            style={{
+                width: CARD_W,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                flexShrink: 0,
+                position: 'relative',
+                zIndex: showTooltip ? 99999 : 1,
+                overflow: 'visible',   // ← critical: tooltip must escape this div
+            }}
+            onMouseEnter={() => setHovering(true)}
+            onMouseLeave={() => setHovering(false)}
         >
             {/* ── Card body ── */}
             <div
@@ -86,7 +212,7 @@ const CoupleCard: React.FC<CoupleCardProps> = ({
                 onMouseDown={e => e.stopPropagation()}
                 onTouchStart={e => e.stopPropagation()}
                 className={`bg-white rounded-xl ${borderWidth} ${borderColor} ${shadow} flex flex-col cursor-pointer transition-all`}
-                style={{ width: CARD_W, height: CARD_H, overflow: 'hidden' }}
+                style={{ width: CARD_W, height: CARD_H, overflow: 'hidden', position: 'relative', zIndex: 2 }}
             >
                 {/* Primary person (top half) */}
                 <div
@@ -144,7 +270,7 @@ const CoupleCard: React.FC<CoupleCardProps> = ({
 
             {/* ── 3 buttons ── */}
             <div
-                className="flex gap-1.5 mt-2 justify-center w-full"
+                style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'center', width: '100%', position: 'relative', zIndex: 2 }}
                 onMouseDown={e => e.stopPropagation()}
                 onTouchStart={e => e.stopPropagation()}
             >
@@ -191,6 +317,11 @@ const CoupleCard: React.FC<CoupleCardProps> = ({
                     </span>
                 </button>
             </div>
+
+            {/* ── Children tooltip (hover preview for collapsed nodes) ── */}
+            {showTooltip && node.children && node.children.length > 0 && (
+                <ChildrenTooltipBox kids={node.children} />
+            )}
         </div>
     );
 };
@@ -244,10 +375,10 @@ const TreeSection: React.FC<TreeSectionProps> = ({
     const totalW = sortedNodes.length * CARD_W + Math.max(0, sortedNodes.length - 1) * CARD_GAP;
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', width: 'max-content' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', width: 'max-content', overflow: 'visible' }}>
 
             {/* ── Sibling row ── */}
-            <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', gap: CARD_GAP, paddingTop: V_STEM }}>
+            <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', gap: CARD_GAP, paddingTop: V_STEM, overflow: 'visible' }}>
 
                 {/* Horizontal connector spanning all siblings */}
                 {sortedNodes.length > 1 && (
@@ -258,16 +389,25 @@ const TreeSection: React.FC<TreeSectionProps> = ({
                         right: CENTER,
                         height: 3,
                         background: '#334155',
-                        zIndex: 0,
+                        zIndex: -1,
                     }} />
                 )}
 
                 {sortedNodes.map((node, idx) => (
                     <div
                         key={node.id}
-                        style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', width: CARD_W, flexShrink: 0 }}
+                        style={{
+                            position: 'relative',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            width: CARD_W,
+                            flexShrink: 0,
+                            zIndex: 1,
+                            overflow: 'visible',  // ← tooltip must escape
+                        }}
                     >
-                        {/* Vertical stem from horizontal bar down to card */}
+                        {/* Vertical stem from horizontal bar down to card — zIndex -1 so card covers it */}
                         <div style={{
                             position: 'absolute',
                             left: CENTER - 1.5,
@@ -275,7 +415,7 @@ const TreeSection: React.FC<TreeSectionProps> = ({
                             width: 3,
                             height: V_STEM,
                             background: '#334155',
-                            zIndex: 0,
+                            zIndex: -1,
                         }} />
 
                         <CoupleCard
@@ -295,7 +435,7 @@ const TreeSection: React.FC<TreeSectionProps> = ({
 
             {/* ── Children of active node ── */}
             {activeNode && (activeNode.children?.length ?? 0) > 0 && (
-                <div style={{ position: 'relative', marginTop: 4 }}>
+                <div style={{ position: 'relative', marginTop: BTN_H }}>
                     {/* Vertical stem + arrowhead going down to children row */}
                     <div style={{ width: 3, height: V_STEM, background: '#334155', marginLeft: CENTER - 1.5, position: 'relative' }}>
                         <div style={{
@@ -330,8 +470,9 @@ export default function FamilyTreePage() {
     const [loading,      setLoading]      = useState(true);
     const [error,        setError]        = useState('');
     const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
-    // Parent node info — fetched separately so we can show UP arrow on root
-    const [parentNode,   setParentNode]   = useState<{ id: number; name: string } | null>(null);
+    // Separate UP arrows: one for the root person's parent, one for the spouse's parent
+    const [primaryParent, setPrimaryParent] = useState<{ id: number; name: string; label: string } | null>(null);
+    const [spouseParent,  setSpouseParent]  = useState<{ id: number; name: string; label: string } | null>(null);
 
     // ── Smooth drag-to-scroll (native DOM events – no React synthetic event lag) ──
     const scrollRef  = useRef<HTMLDivElement>(null);
@@ -438,26 +579,53 @@ export default function FamilyTreePage() {
 
             setTreeData(findNode(res.data) ?? res.data);
 
-            // ── Fetch parent info (father or mother of current root) ──────────
-            // router.register(r'profiles', SamajProfileViewSet) → /samaj/profiles/{id}/
-            // father & mother come as full FamilyMemberSerializer objects with nested user
+            // ── Fetch parent info for BOTH root person AND their spouse ──────
+            // This gives two independent UP arrows so you can navigate either lineage.
             try {
                 const profileRes = await api.get(`/samaj/profiles/${profileId}/`);
                 const d = profileRes.data;
 
-                const extractParent = (p: any) => {
+                const extractParent = (p: any, label: string) => {
                     if (!p) return null;
                     const firstName = p.user?.first_name || '';
                     const lastName  = p.user?.last_name  || '';
                     const name = `${firstName} ${lastName}`.trim() || p.user?.username || 'Parent';
-                    return { id: p.id as number, name };
+                    return { id: p.id as number, name, label };
                 };
 
-                // Prefer father, fallback to mother
-                const parent = extractParent(d.father) ?? extractParent(d.mother) ?? null;
-                setParentNode(parent);
+                // Primary person's parent (father preferred, else mother)
+                const rootGender = d.gender; // 'M' or 'F'
+                const rootLabel  = rootGender === 'M' ? "Father (H)" : "Father (W)";
+                setPrimaryParent(
+                    extractParent(d.father, rootLabel) ??
+                    extractParent(d.mother, rootGender === 'M' ? "Mother (H)" : "Mother (W)") ??
+                    null
+                );
+
+                // Spouse's parent — fetch each spouse's profile to get their father/mother
+                const spouses: any[] = d.spouses ?? [];
+                if (spouses.length > 0) {
+                    try {
+                        const spouseId = spouses[0].id;
+                        const spouseRes = await api.get(`/samaj/profiles/${spouseId}/`);
+                        const sd = spouseRes.data;
+                        const spouseGender = sd.gender;
+                        const spouseLabel  = spouseGender === 'M' ? "Father (H)" : "Father (W)";
+                        setSpouseParent(
+                            extractParent(sd.father, spouseLabel) ??
+                            extractParent(sd.mother, spouseGender === 'M' ? "Mother (H)" : "Mother (W)") ??
+                            null
+                        );
+                    } catch {
+                        setSpouseParent(null);
+                    }
+                } else {
+                    setSpouseParent(null);
+                }
+
             } catch {
-                setParentNode(null); // Silently ignore — UP arrow just won't show
+                setPrimaryParent(null);
+                setSpouseParent(null);
             }
         } catch (err: any) {
             console.error(err);
@@ -591,55 +759,63 @@ export default function FamilyTreePage() {
                     */}
                     <div style={{ display: 'inline-block', minWidth: '100%', padding: '40px 40px 0 40px' }}>
 
-                        {/* ── UP arrow: go to parent root (only if parent exists) ── */}
-                        {parentNode && (
-                            <div style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                width: CARD_W,
-                                marginBottom: 0,
-                            }}>
-                                <button
-                                    onMouseDown={e => e.stopPropagation()}
-                                    onTouchStart={e => e.stopPropagation()}
-                                    onClick={() => { window.location.href = `/community/tree/${parentNode.id}`; }}
-                                    title={`Go up to: ${parentNode.name}`}
-                                    style={{
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        gap: 2,
-                                        background: 'white',
-                                        border: '2px solid #6366f1',
-                                        borderRadius: 10,
-                                        padding: '4px 10px',
-                                        cursor: 'pointer',
-                                        boxShadow: '0 2px 8px rgba(99,102,241,0.15)',
-                                        transition: 'all 0.15s',
-                                        minWidth: 90,
-                                    }}
-                                >
-                                    <ArrowUp size={16} color="#6366f1" strokeWidth={3} />
-                                    <span style={{
-                                        fontSize: 9,
-                                        fontWeight: 800,
-                                        color: '#6366f1',
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.04em',
-                                        maxWidth: 86,
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap',
-                                        textAlign: 'center',
-                                    }}>
-                                        {parentNode.name.replace(/suwalka/gi, '').trim()}
-                                    </span>
-                                </button>
-                                {/* Vertical stem connecting UP button to root card */}
-                                <div style={{ width: 3, height: 16, background: '#6366f1', borderRadius: 2 }} />
-                            </div>
-                        )}
+                        {/* ── UP arrows: primary person's parent (left) + spouse's parent (right) ── */}
+                        {(primaryParent || spouseParent) && (() => {
+                            // Helper to render one UP arrow pill
+                            const UpBtn = ({ p, color }: { p: { id: number; name: string; label: string }, color: string }) => (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                    <button
+                                        onMouseDown={e => e.stopPropagation()}
+                                        onTouchStart={e => e.stopPropagation()}
+                                        onClick={() => { window.location.href = `/community/tree/${p.id}`; }}
+                                        title={`Go to: ${p.name} (${p.label})`}
+                                        style={{
+                                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
+                                            background: 'white', border: `2px solid ${color}`,
+                                            borderRadius: 10, padding: '3px 8px', cursor: 'pointer',
+                                            boxShadow: `0 2px 8px ${color}33`, transition: 'all 0.15s',
+                                            minWidth: 74, maxWidth: 74,
+                                        }}
+                                    >
+                                        <ArrowUp size={13} color={color} strokeWidth={3} />
+                                        <span style={{
+                                            fontSize: 8, fontWeight: 900, color, textTransform: 'uppercase',
+                                            letterSpacing: '0.03em', width: '100%', overflow: 'hidden',
+                                            textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center',
+                                        }}>
+                                            {p.name.replace(/suwalka/gi, '').trim()}
+                                        </span>
+                                        <span style={{
+                                            fontSize: 7, fontWeight: 700, color: '#94a3b8',
+                                            textTransform: 'uppercase', letterSpacing: '0.03em',
+                                        }}>
+                                            {p.label}
+                                        </span>
+                                    </button>
+                                    {/* stem from button down to root card */}
+                                    <div style={{ width: 2, height: 14, background: color, borderRadius: 2 }} />
+                                </div>
+                            );
+
+                            const hasBoth = primaryParent && spouseParent;
+
+                            return (
+                                <div style={{
+                                    display: 'flex',
+                                    flexDirection: 'row',
+                                    alignItems: 'flex-end',
+                                    // If only one arrow, center it over the CARD_W (130px)
+                                    // If both, spread them across the card width
+                                    width: CARD_W,
+                                    justifyContent: hasBoth ? 'space-between' : 'center',
+                                    marginBottom: 0,
+                                    paddingLeft: hasBoth ? 0 : 0,
+                                }}>
+                                    {primaryParent && <UpBtn p={primaryParent} color="#6366f1" />}
+                                    {spouseParent  && <UpBtn p={spouseParent}  color="#ec4899" />}
+                                </div>
+                            );
+                        })()}
 
                         {/* Root card */}
                         <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', width: CARD_W }}>
@@ -658,7 +834,7 @@ export default function FamilyTreePage() {
 
                         {/* Children waterfall */}
                         {(treeData.children?.length ?? 0) > 0 && (
-                            <div style={{ position: 'relative', marginTop: 4 }}>
+                            <div style={{ position: 'relative', marginTop: BTN_H }}>
                                 {/* Vertical stem from root down to first child row */}
                                 <div style={{ width: 3, height: V_STEM, background: '#334155', marginLeft: CENTER - 1.5, position: 'relative' }}>
                                     <div style={{

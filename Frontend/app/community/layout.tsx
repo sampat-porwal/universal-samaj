@@ -3,7 +3,11 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, Users, Calendar, User, Bell, LogOut, Clock, ShieldAlert, Image as ImageIcon, UploadCloud, LayoutDashboard, UserCheck, Network } from 'lucide-react';
+import { 
+    Home, Users, Calendar, User, Bell, LogOut, 
+    Clock, ShieldAlert, Image as ImageIcon, UploadCloud, 
+    LayoutDashboard, UserCheck, Network, FileSpreadsheet 
+} from 'lucide-react'; // 🌟 Added FileSpreadsheet icon
 import api from '@/lib/api';
 
 export default function CommunityLayout({ children }: { children: React.ReactNode }) {
@@ -28,7 +32,7 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
                 // 1. Get User Data
                 const res = await api.get('/auth/profile/');
                 setProfile(res.data);
-                setUserRole(res.data.role); 
+                setUserRole(res.data.role?.toUpperCase() || ''); // Ensure uppercase for role checking
                 
                 // 2. Fetch Samaj Profile to check VERIFICATION STATUS
                 const samajRes = await api.get('/samaj/profiles/'); 
@@ -38,7 +42,7 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
                     setSamajStatus(myProfile.verification_status);
                     setMyProfileId(myProfile.id); // 🌟 Save ID for the Tree Button
                 } else {
-                    if (['SUPERADMIN', 'ADMIN'].includes(res.data.role)) {
+                    if (['SUPERADMIN', 'ADMIN', 'SKPUSER', 'SYSTEM_ADMIN'].includes(res.data.role?.toUpperCase())) {
                         setSamajStatus('VERIFIED'); 
                     } else {
                         setSamajStatus('NOT_FOUND');
@@ -76,13 +80,18 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
     }
 
     // 🌟 STRICT ROLE FILTER 1: Admins & Core Members get Verify & Bulk Import
-    if (['SUPERADMIN', 'ADMIN', 'CORE_ADMIN', 'CORE_MEMBER'].includes(userRole)) {
+    if (['SUPERADMIN', 'ADMIN', 'CORE_ADMIN', 'CORE_MEMBER', 'SKPUSER'].includes(userRole)) {
         NAV_ITEMS.push({ name: 'Verify Members', path: '/community/verify', icon: <UserCheck size={24} /> });
         NAV_ITEMS.push({ name: 'Bulk Import', path: '/community/admin/bulk-import', icon: <UploadCloud size={24} /> });
     }
 
-    // 🌟 STRICT ROLE FILTER 2: ONLY Top Level (SuperAdmin & Admin) get the "Bridge" to ERP Dashboard
-    if (['SUPERADMIN', 'ADMIN'].includes(userRole)) {
+    // 🌟 STRICT ROLE FILTER 2: ONLY Admin, System Admin & SKPUSER get CSV Export/Import
+    if (['SUPERADMIN', 'ADMIN', 'SYSTEM_ADMIN', 'SKPUSER'].includes(userRole)) {
+        NAV_ITEMS.push({ name: 'CSV Data', path: '/community/admin/csv', icon: <FileSpreadsheet size={24} /> });
+    }
+
+    // 🌟 STRICT ROLE FILTER 3: ONLY Top Level (SuperAdmin & Admin) get the "Bridge" to ERP Dashboard
+    if (['SUPERADMIN', 'ADMIN', 'SKPUSER'].includes(userRole)) {
         NAV_ITEMS.push({ name: 'ERP Dashboard', path: '/dashboard', icon: <LayoutDashboard size={24} /> });
     }
 

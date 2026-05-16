@@ -81,7 +81,8 @@ else:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("DATABASE_NAME", "suwalka_samaj"),
+            "NAME": os.getenv("DATABASE_NAME", "suh_suw_lka_samaj"),
+            # "NAME": os.getenv("DATABASE_NAME", "suwalka_samaj"),
             "USER": os.getenv("DATABASE_USER", "skpuser"),
             "PASSWORD": os.getenv("DATABASE_PASSWORD", "mypassword"),
             "HOST": os.getenv("DATABASE_HOST", "localhost"),
