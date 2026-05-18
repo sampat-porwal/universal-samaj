@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'payment_gateway',
+    'samaj_events',
 ]
 
 REST_FRAMEWORK = {
