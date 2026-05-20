@@ -1,7 +1,7 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db.models import Q  # 🌟 NEW: For complex queries
+from django.db.models import Q, Count  # 🌟 Added Count for Analytics
 from .models import SamajEvent, EventOrganizer, EventParticipant, EventChatMessage
 from .serializers import SamajEventSerializer, EventOrganizerSerializer, EventChatMessageSerializer
 from core_app.models import SamajProfile
@@ -10,19 +10,18 @@ class SamajEventViewSet(viewsets.ModelViewSet):
     serializer_class = SamajEventSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    # 🌟 GEO-FENCING LOGIC (Show only relevant events)
+    # 🌟 1. GEO-FENCING LOGIC (Show only relevant events)
     def get_queryset(self):
         user = self.request.user
         qs = SamajEvent.objects.all().order_by('-date_start')
 
-        # 1. SuperAdmins and System Admins see EVERYTHING
+        # SuperAdmins and System Admins see EVERYTHING
         if user.role in ['SUPERADMIN', 'ADMIN', 'SKPUSER', 'SYSTEM_ADMIN']:
             return qs
 
-        # 2. Normal Users see only GLOBAL events OR events matching their City/District
+        # Normal Users see only GLOBAL events OR events matching their City/District
         if hasattr(user, 'samaj_profile'):
             profile = user.samaj_profile
-            # Assuming village_en or address_1 holds the user's city/district name
             user_city = profile.village_en or "" 
             
             qs = qs.filter(
@@ -37,7 +36,7 @@ class SamajEventViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user, updated_by=self.request.user)
 
-    # 🌟 SMART SEARCH API FOR COMMITTEE MEMBERS
+    # 🌟 2. SMART SEARCH API FOR COMMITTEE MEMBERS
     @action(detail=False, methods=['get'])
     def search_profiles(self, request):
         q = request.query_params.get('q', '').strip()
@@ -66,6 +65,7 @@ class SamajEventViewSet(viewsets.ModelViewSet):
             })
         return Response(data)
 
+    # 🌟 3. EVENT REGISTRATION LOGIC
     @action(detail=True, methods=['post'])
     def join(self, request, pk=None):
         event = self.get_object()
@@ -78,15 +78,25 @@ class SamajEventViewSet(viewsets.ModelViewSet):
         except Exception:
             return Response({"error": "You have already joined this event."}, status=status.HTTP_400_BAD_REQUEST)
 
+    # 🌟 4. MANAGE TEAM LOGIC (With Strict Event Admin Permissions)
     @action(detail=True, methods=['get', 'post', 'delete'])
     def team(self, request, pk=None):
         event = self.get_object()
+        
+        # Security Check: Only Main Admins OR "Event Admins" can manage the team
+        is_admin = request.user.role in ['SUPERADMIN', 'ADMIN', 'SKPUSER']
+        is_event_admin = event.organizers.filter(profile__user=request.user, role_title='Event Admin').exists()
+        
+        if not (is_admin or is_event_admin):
+            return Response({"error": "Access Denied. Only Event Admins can manage the team."}, status=403)
+
         if request.method == 'GET':
             organizers = event.organizers.all()
             return Response(EventOrganizerSerializer(organizers, many=True).data)
+            
         elif request.method == 'POST':
             samaj_id = request.data.get('samaj_id')
-            role_title = request.data.get('role_title', 'Committee Member')
+            role_title = request.data.get('role_title', 'Event Member')
             try:
                 profile = SamajProfile.objects.get(samaj_id=samaj_id)
                 EventOrganizer.objects.create(event=event, profile=profile, role_title=role_title, created_by=request.user, updated_by=request.user)
@@ -95,11 +105,13 @@ class SamajEventViewSet(viewsets.ModelViewSet):
                 return Response({"error": "Invalid Samaj ID. Profile not found."}, status=404)
             except Exception:
                 return Response({"error": "Member is already in the committee."}, status=400)
+                
         elif request.method == 'DELETE':
             org_id = request.data.get('organizer_id')
             EventOrganizer.objects.filter(id=org_id, event=event).delete()
             return Response({"message": "Member removed."})
 
+    # 🌟 5. EVENT CHAT LOGIC
     @action(detail=True, methods=['get', 'post'])
     def chat(self, request, pk=None):
         event = self.get_object()
@@ -112,12 +124,35 @@ class SamajEventViewSet(viewsets.ModelViewSet):
         if request.method == 'GET':
             msgs = event.chat_messages.all()
             return Response(EventChatMessageSerializer(msgs, many=True, context={'request': request}).data)
+            
         elif request.method == 'POST':
             msg = request.data.get('message')
             if msg and msg.strip():
                 EventChatMessage.objects.create(event=event, sender=request.user.samaj_profile, message=msg, created_by=request.user, updated_by=request.user)
                 return Response({"message": "Sent."})
             return Response({"error": "Message cannot be empty."}, status=400)
+
+    # 🌟 6. NEW: EVENT DASHBOARD ANALYTICS
+    @action(detail=True, methods=['get'])
+    def analytics(self, request, pk=None):
+        event = self.get_object()
+        
+        # Security Check: Only Organizers or Admins can see analytics
+        is_admin = request.user.role in ['SUPERADMIN', 'ADMIN', 'SKPUSER']
+        is_organizer = event.organizers.filter(profile__user=request.user).exists()
+        
+        if not (is_admin or is_organizer):
+            return Response({"error": "Access Denied."}, status=403)
+
+        # Count registrations grouped by user's village
+        stats = event.participants.values('profile__village_en').annotate(count=Count('id')).order_by('-count')
+        
+        return Response({
+            "total_registrations": event.participants.count(),
+            "village_wise": stats,
+            "committee_size": event.organizers.count()
+        })
+
 
 class EventOrganizerViewSet(viewsets.ModelViewSet):
     queryset = EventOrganizer.objects.all()
