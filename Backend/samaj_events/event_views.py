@@ -10,7 +10,7 @@ class SamajEventViewSet(viewsets.ModelViewSet):
     serializer_class = SamajEventSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    # 🌟 NEW: GEO-FENCING LOGIC (Show only relevant events)
+    # 🌟 GEO-FENCING LOGIC (Show only relevant events)
     def get_queryset(self):
         user = self.request.user
         qs = SamajEvent.objects.all().order_by('-date_start')
@@ -36,6 +36,35 @@ class SamajEventViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user, updated_by=self.request.user)
+
+    # 🌟 SMART SEARCH API FOR COMMITTEE MEMBERS
+    @action(detail=False, methods=['get'])
+    def search_profiles(self, request):
+        q = request.query_params.get('q', '').strip()
+        if not q or len(q) < 2:
+            return Response([])
+        
+        # Searching in Name, Mobile, Village, and Samaj ID
+        profiles = SamajProfile.objects.filter(
+            Q(user__first_name__icontains=q) |
+            Q(user__mobile_no__icontains=q) |
+            Q(village_en__icontains=q) |
+            Q(samaj_id__icontains=q)
+        ).select_related('user', 'father', 'father__user')[:10] # Show top 10 results
+
+        data = []
+        for p in profiles:
+            father_name = p.father.user.first_name if p.father and hasattr(p.father, 'user') else "N/A"
+            photo_url = request.build_absolute_uri(p.profile_image.url) if p.profile_image else None
+            data.append({
+                "samaj_id": p.samaj_id,
+                "name": p.user.first_name,
+                "mobile": p.user.mobile_no,
+                "village": p.village_en,
+                "father_name": father_name,
+                "photo_url": photo_url
+            })
+        return Response(data)
 
     @action(detail=True, methods=['post'])
     def join(self, request, pk=None):
@@ -94,5 +123,6 @@ class EventOrganizerViewSet(viewsets.ModelViewSet):
     queryset = EventOrganizer.objects.all()
     serializer_class = EventOrganizerSerializer
     permission_classes = [permissions.IsAuthenticated]
+    
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user, updated_by=self.request.user)
