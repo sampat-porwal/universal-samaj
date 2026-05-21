@@ -17,3 +17,9 @@ Backend/.coverage
 
 # OS Junk
 .DS_Store
+
+# Ignore all files in the media directory
+Backend/media/**
+
+# But do not ignore the directory itself (requires a .gitkeep file inside the folder)
+!Backend/media/**/.gitkeep

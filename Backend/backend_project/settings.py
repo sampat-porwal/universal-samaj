@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'payment_gateway',
+    'samaj_events',
 ]
 
 REST_FRAMEWORK = {
@@ -81,7 +82,9 @@ else:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("DATABASE_NAME", "suwalka_samaj"),
+            # "NAME": os.getenv("DATABASE_NAME", "suh_suw_lka_samaj"),
+            # "NAME": os.getenv("DATABASE_NAME", "suwalka_samaj"),
+            "NAME": os.getenv("DATABASE_NAME", "suwalka"),
             "USER": os.getenv("DATABASE_USER", "skpuser"),
             "PASSWORD": os.getenv("DATABASE_PASSWORD", "mypassword"),
             "HOST": os.getenv("DATABASE_HOST", "localhost"),

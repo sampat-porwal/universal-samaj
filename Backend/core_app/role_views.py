@@ -57,7 +57,8 @@ class StaffView(APIView):
         return Response(data, status=status.HTTP_200_OK)
 
     def post(self, request):
-        if not request.user.is_superuser:
+        # 🌟 FIX: Allow SUPERADMIN and ADMIN to create staff
+        if not request.user.is_superuser and getattr(request.user, 'role', '') not in ['SUPERADMIN', 'ADMIN']:
             return Response({"error": "Permission Denied"}, status=status.HTTP_403_FORBIDDEN)
             
         data = request.data
@@ -83,7 +84,8 @@ class StaffDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def put(self, request, pk):
-        if not request.user.is_superuser:
+        # 🌟 FIX: Allow SUPERADMIN and ADMIN to update staff
+        if not request.user.is_superuser and getattr(request.user, 'role', '') not in ['SUPERADMIN', 'ADMIN']:
             return Response({"error": "Permission Denied"}, status=status.HTTP_403_FORBIDDEN)
             
         try:
@@ -101,7 +103,8 @@ class StaffDetailView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        if not request.user.is_superuser:
+        # 🌟 FIX: Allow SUPERADMIN and ADMIN to delete staff
+        if not request.user.is_superuser and getattr(request.user, 'role', '') not in ['SUPERADMIN', 'ADMIN']:
             return Response({"error": "Permission Denied"}, status=status.HTTP_403_FORBIDDEN)
             
         try:
@@ -123,8 +126,13 @@ class AuditLogView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if not request.user.is_superuser:
-            return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+        # 🌟 FIX: Allow SUPERADMIN, ADMIN, and CORE_ADMIN to view logs
+        allowed_roles = ['SUPERADMIN', 'ADMIN', 'CORE_ADMIN']
+        
+        if not request.user.is_superuser and getattr(request.user, 'role', '') not in allowed_roles:
+            return Response({
+                "error": f"Permission denied. Your current role lacks Admin rights."
+            }, status=status.HTTP_403_FORBIDDEN)
 
         logs = AuditLog.objects.all().order_by('-timestamp')[:100]
         data = [{

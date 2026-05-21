@@ -10,9 +10,13 @@ class AuditLogView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if request.user.role not in ['SUPERADMIN', 'ADMIN']:
-            return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+        # 🌟 UPGRADED SECURITY: Terminal Superuser ko bypass milega, aur ADMIN/COMPANY_ADMIN ko normal access
+        allowed_roles = ['SUPERADMIN', 'ADMIN', 'COMPANY_ADMIN']
+        
+        if not request.user.is_superuser and request.user.role not in allowed_roles:
+            return Response({"error": "Permission denied. You need Admin rights to view logs."}, status=status.HTTP_403_FORBIDDEN)
 
+        # Fetch the latest 100 logs
         logs = AuditLog.objects.all().order_by('-timestamp')[:100]
         
         data = [{

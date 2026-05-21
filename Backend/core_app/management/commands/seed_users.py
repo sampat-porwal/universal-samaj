@@ -12,9 +12,9 @@ class Command(BaseCommand):
         self.stdout.write("Creating 20 Dummy Users... Please wait.")
         
         first_names = ["Amit", "Vikas", "Suresh", "Ramesh", "Sunita", "Pooja", "Anil", "Neha", "Kamal", "Rekha"]
-        last_names = ["Sharma", "Verma", "Jain", "Gupta", "Patel", "Singh", "Yadav", "Rajput"]
-        villages = ["Dhundra", "Godash", "Bhilwara", "Jaipur", "Udaipur", "Ajmer", "Kota"]
-        gotras = ["Rathore", "Chauhan", "Sisodia", "Solanki", "Bhati"]
+        last_names = ["Suwalka", "Suwalka", "Suwalka", "Suwalka", "Suwalka", "Suwalka", "Suwalka", "Suwalka"]
+        villages = ["Gangapur", "Godash", "Bhilwara", "Jaipur", "Udaipur", "Ajmer", "Kota"]
+        gotras = ["Dhundra", "Anchera", "Ramdiya", "Jackwaliya", "rajora"]
 
         created_count = 0
 
