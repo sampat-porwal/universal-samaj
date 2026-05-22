@@ -66,11 +66,30 @@ class EventParticipantSerializer(serializers.ModelSerializer):
     profile_mobile = serializers.CharField(source='profile.user.mobile_no', read_only=True)
     village = serializers.CharField(source='profile.village_en', read_only=True)
     samaj_id = serializers.CharField(source='profile.samaj_id', read_only=True)
+    # 🌟 NEW: photo and father name for participant cards
+    profile_photo = serializers.SerializerMethodField()
+    father_name = serializers.SerializerMethodField()
 
     class Meta:
         model = EventParticipant
         fields = '__all__'
         read_only_fields = ('created_at', 'updated_at', 'created_by', 'updated_by')
+
+    def get_profile_photo(self, obj):
+        request = self.context.get('request')
+        if obj.profile.profile_image and request:
+            return request.build_absolute_uri(obj.profile.profile_image.url)
+        return None
+
+    def get_father_name(self, obj):
+        """Returns father's name if linked via father FK on SamajProfile."""
+        try:
+            father = obj.profile.father  # FK to another SamajProfile
+            if father and hasattr(father, 'user'):
+                return father.user.first_name
+        except Exception:
+            pass
+        return None
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -78,16 +97,23 @@ class EventParticipantSerializer(serializers.ModelSerializer):
 # ──────────────────────────────────────────────────────────────────────────────
 class EventChatMessageSerializer(serializers.ModelSerializer):
     sender_name = serializers.CharField(source='sender.user.first_name', read_only=True)
+    sender_photo = serializers.SerializerMethodField()  # 🌟 profile photo
     is_me = serializers.SerializerMethodField()
 
     class Meta:
         model = EventChatMessage
-        fields = ['id', 'sender_name', 'message', 'created_at', 'is_me']
+        fields = ['id', 'sender_name', 'sender_photo', 'message', 'created_at', 'is_me']
         read_only_fields = ('created_at',)
 
     def get_is_me(self, obj):
         request = self.context.get('request')
         return request and request.user == obj.sender.user
+
+    def get_sender_photo(self, obj):
+        request = self.context.get('request')
+        if obj.sender.profile_image and request:
+            return request.build_absolute_uri(obj.sender.profile_image.url)
+        return None
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -101,22 +127,25 @@ class PollOptionSerializer(serializers.ModelSerializer):
         fields = ['id', 'option_text', 'vote_count']
 
     def get_vote_count(self, obj):
-        # Only reveal counts when poll is closed
+        # Show counts only when poll is CLOSED (results revealed)
         if obj.poll.status == 'CLOSED':
             return obj.vote_count
-        return None
+        return None  # Hidden while voting is active
 
 
 class SecretPollSerializer(serializers.ModelSerializer):
     options = PollOptionSerializer(many=True, read_only=True)
     my_vote = serializers.SerializerMethodField()
-    time_left_seconds = serializers.SerializerMethodField()  # 🌟 NEW: countdown
-    total_votes = serializers.SerializerMethodField()        # 🌟 NEW
+    time_left_seconds = serializers.SerializerMethodField()
+    total_votes = serializers.SerializerMethodField()
+    expires_at_display = serializers.SerializerMethodField()  # 🌟 human readable
 
     class Meta:
         model = SecretPoll
-        fields = ['id', 'event', 'question', 'status', 'expires_at',
-                  'options', 'my_vote', 'time_left_seconds', 'total_votes', 'created_at']
+        fields = [
+            'id', 'event', 'question', 'status', 'expires_at', 'expires_at_display',
+            'options', 'my_vote', 'time_left_seconds', 'total_votes', 'created_at'
+        ]
         read_only_fields = ('created_at',)
 
     def get_my_vote(self, obj):
@@ -134,6 +163,14 @@ class SecretPollSerializer(serializers.ModelSerializer):
 
     def get_total_votes(self, obj):
         return PollVote.objects.filter(poll=obj).count()
+
+    def get_expires_at_display(self, obj):
+        """Returns a friendly local datetime string for display."""
+        if not obj.expires_at:
+            return None
+        from django.utils.timezone import localtime
+        local = localtime(obj.expires_at)
+        return local.strftime('%d %b %Y, %I:%M %p')
 
 
 # ──────────────────────────────────────────────────────────────────────────────

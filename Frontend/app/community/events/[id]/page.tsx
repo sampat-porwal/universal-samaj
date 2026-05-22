@@ -21,6 +21,16 @@ export default function ManageEventPage({ params }: { params: Promise<{ id: stri
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<ManageTab>('TEAM');
 
+    // Current user context — determines what actions are available
+    const [currentUserSamajId, setCurrentUserSamajId] = useState('');
+    const [currentUserSystemRole, setCurrentUserSystemRole] = useState('');
+    // Derived after team loads:
+    const [myTeamRole, setMyTeamRole] = useState<string | null>(null); // 'Event Admin' | 'Event Member' | null
+
+    const isSystemAdmin = ['SUPERADMIN', 'ADMIN', 'SKPUSER', 'SYSTEM_ADMIN'].includes(currentUserSystemRole);
+    // Can add/remove members = system admin OR Event Admin organizer
+    const canManageTeam = isSystemAdmin || myTeamRole === 'Event Admin';
+
     // Add member form
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -35,6 +45,13 @@ export default function ManageEventPage({ params }: { params: Promise<{ id: stri
 
     useEffect(() => { if (eventId) loadAll(); }, [eventId]);
     useEffect(() => {
+        // Fetch current user's profile to know their samaj_id and role
+        api.get('/auth/profile/').then(res => {
+            setCurrentUserSamajId(res.data.samaj_id || '');
+            setCurrentUserSystemRole(res.data.role?.toUpperCase() || '');
+        }).catch(() => {});
+    }, []);
+    useEffect(() => {
         if (activeTab === 'PARTICIPANTS') loadParticipants();
         if (activeTab === 'ANALYTICS') loadAnalytics();
         if (activeTab === 'BDC') loadBdc();
@@ -48,7 +65,11 @@ export default function ManageEventPage({ params }: { params: Promise<{ id: stri
                 api.get(`/events/list/${eventId}/team/`),
             ]);
             setEvent(evRes.data);
-            setTeam(teamRes.data || []);
+            const teamData = teamRes.data || [];
+            setTeam(teamData);
+            // Derive current user's role in this event's team using samaj_id match
+            // event.organizer_role is returned by the serializer for the current user
+            setMyTeamRole(evRes.data.organizer_role || null);
         } catch { console.error('Load failed'); }
         finally { setIsLoading(false); }
     };
@@ -87,10 +108,12 @@ export default function ManageEventPage({ params }: { params: Promise<{ id: stri
         e.preventDefault();
         if (!selectedProfile) { alert('Please select a profile from search.'); return; }
         setAddingMember(true);
+        // Event admins can only add Event Members — they cannot assign Event Admin role
+        const roleToAssign = isSystemAdmin ? selectedRole : 'Event Member';
         try {
             await api.post(`/events/list/${eventId}/team/`, {
                 samaj_id: selectedProfile.samaj_id,
-                role_title: selectedRole,
+                role_title: roleToAssign,
             });
             setSearchQuery(''); setSelectedProfile(null); setSearchResults([]);
             const res = await api.get(`/events/list/${eventId}/team/`);
@@ -200,11 +223,17 @@ export default function ManageEventPage({ params }: { params: Promise<{ id: stri
             {/* ── TEAM TAB ── */}
             {activeTab === 'TEAM' && (
                 <div className="grid lg:grid-cols-3 gap-6">
-                    {/* Add member form */}
+                    {/* Add member form — only for Event Admins and System Admins */}
+                    {canManageTeam ? (
                     <div className="lg:col-span-1 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                        <h2 className="font-black text-gray-800 mb-4 flex items-center gap-2">
+                        <h2 className="font-black text-gray-800 mb-1 flex items-center gap-2">
                             <UserPlus size={16} className="text-blue-600" /> Add Team Member
                         </h2>
+                        {myTeamRole === 'Event Admin' && !isSystemAdmin && (
+                            <p className="text-xs text-blue-600 bg-blue-50 rounded-lg px-3 py-1.5 mb-3 font-medium">
+                                You are an Event Admin — you can add Event Members to this event.
+                            </p>
+                        )}
                         <form onSubmit={handleAddMember} className="space-y-3">
                             <div className="relative">
                                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -217,17 +246,25 @@ export default function ManageEventPage({ params }: { params: Promise<{ id: stri
 
                             {/* Search dropdown */}
                             {searchResults.length > 0 && (
-                                <div className="border rounded-xl overflow-hidden shadow-sm">
+                                <div className="border rounded-xl overflow-hidden shadow-sm max-h-52 overflow-y-auto">
                                     {searchResults.map(p => (
                                         <button key={p.samaj_id} type="button"
                                             onClick={() => { setSelectedProfile(p); setSearchQuery(p.name); setSearchResults([]); }}
-                                            className="w-full flex items-center gap-3 p-3 text-left hover:bg-blue-50 border-b last:border-b-0 transition">
-                                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-black shrink-0">
-                                                {p.name[0]}
+                                            className="w-full flex items-center gap-3 p-2.5 text-left hover:bg-blue-50 border-b last:border-b-0 transition">
+                                            {/* Strict 36×36 avatar */}
+                                            <div style={{ width: '36px', height: '36px', minWidth: '36px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #e5e7eb' }}>
+                                                {p.photo_url ? (
+                                                    <img src={p.photo_url} alt={p.name}
+                                                        style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }} />
+                                                ) : (
+                                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '13px', background: '#dbeafe', color: '#1d4ed8' }}>
+                                                        {p.name?.[0]?.toUpperCase() || '?'}
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div>
-                                                <div className="text-sm font-bold text-gray-900">{p.name}</div>
-                                                <div className="text-xs text-gray-400">{p.village} · {p.samaj_id}</div>
+                                            <div className="min-w-0">
+                                                <div className="text-sm font-bold text-gray-900 truncate">{p.name}</div>
+                                                <div className="text-xs text-gray-400 truncate">{p.village} · {p.samaj_id}</div>
                                             </div>
                                         </button>
                                     ))}
@@ -235,20 +272,43 @@ export default function ManageEventPage({ params }: { params: Promise<{ id: stri
                             )}
 
                             {selectedProfile && (
-                                <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2">
-                                    <CheckCircle2 size={16} className="text-green-600 shrink-0" />
-                                    <div>
-                                        <div className="text-sm font-bold text-green-800">{selectedProfile.name}</div>
-                                        <div className="text-xs text-green-600">{selectedProfile.samaj_id}</div>
+                                <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-3">
+                                    {/* Selected profile photo */}
+                                    <div style={{ width: '36px', height: '36px', minWidth: '36px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #bbf7d0' }}>
+                                        {selectedProfile.photo_url ? (
+                                            <img src={selectedProfile.photo_url} alt={selectedProfile.name}
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }} />
+                                        ) : (
+                                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '13px', background: '#bbf7d0', color: '#065f46' }}>
+                                                {selectedProfile.name?.[0]?.toUpperCase() || '?'}
+                                            </div>
+                                        )}
                                     </div>
+                                    <div className="min-w-0">
+                                        <div className="text-sm font-bold text-green-800 truncate">{selectedProfile.name}</div>
+                                        <div className="text-xs text-green-600">{selectedProfile.village} · {selectedProfile.samaj_id}</div>
+                                    </div>
+                                    <button type="button" onClick={() => { setSelectedProfile(null); setSearchQuery(''); }}
+                                        className="ml-auto text-gray-400 hover:text-red-500 shrink-0">
+                                        <X size={14} />
+                                    </button>
                                 </div>
                             )}
 
-                            <select value={selectedRole} onChange={e => setSelectedRole(e.target.value)}
-                                className="w-full border p-2.5 rounded-xl bg-gray-50 text-sm outline-none">
-                                <option value="Event Admin">Event Admin (can add/remove members)</option>
-                                <option value="Event Member">Event Member</option>
-                            </select>
+                            {/* Role selector — only system admins can assign Event Admin role */}
+                            {isSystemAdmin ? (
+                                <select value={selectedRole} onChange={e => setSelectedRole(e.target.value)}
+                                    className="w-full border p-2.5 rounded-xl bg-gray-50 text-sm outline-none">
+                                    <option value="Event Admin">Event Admin (can add/remove members)</option>
+                                    <option value="Event Member">Event Member</option>
+                                </select>
+                            ) : (
+                                // Event admins can only add Event Members
+                                <div className="bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm text-gray-600 font-medium flex items-center gap-2">
+                                    <Shield size={14} className="text-gray-400" />
+                                    Adding as: <span className="font-black text-gray-800">Event Member</span>
+                                </div>
+                            )}
 
                             <button type="submit" disabled={addingMember || !selectedProfile}
                                 className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-sm transition flex items-center justify-center gap-2">
@@ -257,35 +317,59 @@ export default function ManageEventPage({ params }: { params: Promise<{ id: stri
                             </button>
                         </form>
                     </div>
+                    ) : (
+                        /* Non-admins see a read-only info panel */
+                        <div className="lg:col-span-1 bg-gray-50 p-5 rounded-2xl border border-gray-200">
+                            <div className="text-center py-4">
+                                <Shield size={32} className="text-gray-300 mx-auto mb-2" />
+                                <p className="text-sm font-bold text-gray-500">
+                                    {myTeamRole === 'Event Member'
+                                        ? 'You are an Event Member. Only Event Admins can add members.'
+                                        : 'Only Event Admins can manage the team.'}
+                                </p>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Team member cards */}
                     <div className="lg:col-span-2">
                         <div className="grid sm:grid-cols-2 gap-3">
                             {team.length === 0
                                 ? <div className="col-span-2 p-8 text-center border-2 border-dashed rounded-2xl text-gray-400 text-sm font-bold">
-                                    No team members yet. Add someone above.
+                                    No team members yet.
                                   </div>
                                 : team.map(m => (
-                                    <div key={m.id} className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center justify-between shadow-sm hover:shadow-md transition">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black ${
-                                                m.role_title === 'Event Admin' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'
-                                            }`}>
-                                                {m.profile_name?.[0] || '?'}
+                                    <div key={m.id} className={`bg-white border rounded-2xl p-4 flex items-center justify-between shadow-sm hover:shadow-md transition ${
+                                        m.role_title === 'Event Admin' ? 'border-blue-100' : 'border-gray-100'
+                                    }`}>
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            {/* Strict 44×44 circle — inline style is immune to Tailwind specificity issues */}
+                                            <div style={{ width: '44px', height: '44px', minWidth: '44px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #e5e7eb' }}>
+                                                {m.profile_photo ? (
+                                                    <img src={m.profile_photo} alt={m.profile_name}
+                                                        style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }} />
+                                                ) : (
+                                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '16px', background: m.role_title === 'Event Admin' ? '#dbeafe' : '#f3f4f6', color: m.role_title === 'Event Admin' ? '#1d4ed8' : '#6b7280' }}>
+                                                        {m.profile_name?.[0]?.toUpperCase() || '?'}
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div>
-                                                <div className="font-bold text-sm text-gray-900">{m.profile_name}</div>
-                                                <div className={`text-[10px] font-black uppercase ${
+                                            <div className="min-w-0">
+                                                <div className="font-black text-sm text-gray-900 truncate">{m.profile_name}</div>
+                                                <div className={`text-[10px] font-black uppercase tracking-wide ${
                                                     m.role_title === 'Event Admin' ? 'text-blue-600' : 'text-gray-400'
-                                                }`}>
-                                                    {m.role_title}
-                                                </div>
+                                                }`}>{m.role_title}</div>
+                                                {m.profile_mobile && (
+                                                    <div className="text-[10px] text-gray-400 font-medium">{m.profile_mobile}</div>
+                                                )}
                                             </div>
                                         </div>
-                                        <button onClick={() => handleRemoveMember(m.id)}
-                                            className="text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 p-2 rounded-lg transition">
-                                            <Trash2 size={15} />
-                                        </button>
+                                        {canManageTeam && (isSystemAdmin || m.role_title !== 'Event Admin') && (
+                                            <button onClick={() => handleRemoveMember(m.id)}
+                                                className="text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 p-2 rounded-lg transition shrink-0 ml-2">
+                                                <Trash2 size={15} />
+                                            </button>
+                                        )}
                                     </div>
                                 ))
                             }
@@ -299,32 +383,82 @@ export default function ManageEventPage({ params }: { params: Promise<{ id: stri
 
             {/* ── PARTICIPANTS TAB ── */}
             {activeTab === 'PARTICIPANTS' && (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="p-4 border-b bg-gray-50 flex items-center justify-between">
+                <div>
+                    <div className="flex items-center justify-between mb-4">
                         <h2 className="font-black text-gray-700 flex items-center gap-2">
                             <Users size={16} className="text-green-600" /> Registered Participants
                         </h2>
-                        <span className="text-sm font-bold text-gray-500">{participants.length} total</span>
+                        <span className="bg-green-50 text-green-700 text-sm font-black px-3 py-1 rounded-full border border-green-200">
+                            {participants.length} total
+                        </span>
                     </div>
+
                     {participants.length === 0 ? (
-                        <div className="p-8 text-center text-gray-400 text-sm font-bold">No participants yet.</div>
+                        <div className="bg-white rounded-2xl p-12 text-center border-2 border-dashed border-gray-200 text-gray-400 font-bold text-sm">
+                            No participants registered yet.
+                        </div>
                     ) : (
-                        <div className="divide-y">
+                        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                             {participants.map((p, idx) => (
-                                <div key={p.id} className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-7 h-7 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-black shrink-0">
-                                            {idx + 1}
+                                <div key={p.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition overflow-hidden">
+                                    {/* Card top — photo + info side by side */}
+                                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 px-4 py-3 flex items-center gap-3">
+                                        {/* Fixed circular photo */}
+                                        <div className="relative shrink-0">
+                                            {/* Strict 44×44 circle */}
+                                            <div style={{ width: '44px', height: '44px', minWidth: '44px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #d1fae5' }}>
+                                                {p.profile_photo ? (
+                                                    <img src={p.profile_photo} alt={p.profile_name}
+                                                        style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }} />
+                                                ) : (
+                                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '16px', background: '#d1fae5', color: '#065f46' }}>
+                                                        {p.profile_name?.[0]?.toUpperCase() || '?'}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {/* Serial badge */}
+                                            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-600 text-white rounded-full flex items-center justify-center text-[8px] font-black shadow">
+                                                {idx + 1}
+                                            </div>
                                         </div>
-                                        <div>
-                                            <div className="text-sm font-bold text-gray-900">{p.profile_name}</div>
-                                            <div className="text-xs text-gray-400">{p.village} · {p.samaj_id}</div>
+                                        <div className="min-w-0">
+                                            <h3 className="font-black text-gray-900 text-sm leading-tight truncate">{p.profile_name}</h3>
+                                            <p className="text-[10px] text-green-700 font-bold">{p.samaj_id}</p>
                                         </div>
                                     </div>
-                                    <button onClick={() => handleRemoveParticipant(p.id)}
-                                        className="text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition">
-                                        <XCircle size={15} />
-                                    </button>
+
+                                    {/* Card body */}
+                                    <div className="px-4 py-3 space-y-1.5">
+                                        {p.father_name && (
+                                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                                                <span className="text-gray-400 font-bold w-14 shrink-0">Father</span>
+                                                <span className="font-medium truncate">{p.father_name}</span>
+                                            </div>
+                                        )}
+                                        {p.profile_mobile && (
+                                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                                                <span className="text-gray-400 font-bold w-14 shrink-0">Mobile</span>
+                                                <a href={`tel:${p.profile_mobile}`}
+                                                    className="font-medium text-blue-600 hover:underline">{p.profile_mobile}</a>
+                                            </div>
+                                        )}
+                                        {p.village && (
+                                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                                                <span className="text-gray-400 font-bold w-14 shrink-0">Village</span>
+                                                <span className="font-medium truncate">{p.village}</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Remove */}
+                                    {canManageTeam && (
+                                        <div className="px-4 pb-3">
+                                            <button onClick={() => handleRemoveParticipant(p.id)}
+                                                className="w-full text-xs font-bold text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 py-1.5 rounded-lg transition flex items-center justify-center gap-1">
+                                                <XCircle size={12} /> Remove
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>

@@ -25,8 +25,9 @@ def is_system_admin(user):
 
 def is_event_admin(event, user):
     """Returns True if user is a system admin OR an Event Admin organizer."""
+    # 🌟 FIX: Added __iexact to ensure case-insensitive matching for full access
     return is_system_admin(user) or event.organizers.filter(
-        profile__user=user, role_title='Event Admin'
+        profile__user=user, role_title__iexact='event admin'
     ).exists()
 
 def is_event_organizer(event, user):
@@ -66,13 +67,9 @@ class SamajEventViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user, updated_by=self.request.user)
 
-    # ── 2. STATUS MANAGEMENT (pause, cancel, complete, reactivate) ────────────
+    # ── 2. STATUS MANAGEMENT ────────────
     @action(detail=True, methods=['post'])
     def set_status(self, request, pk=None):
-        """
-        Body: { "event_status": "PAUSED" | "CANCELLED" | "COMPLETED" | "ACTIVE" }
-        Only system admins can change event status.
-        """
         event = self.get_object()
         if not is_system_admin(request.user):
             return Response({"error": "Only admins can change event status."}, status=403)
@@ -88,7 +85,7 @@ class SamajEventViewSet(viewsets.ModelViewSet):
         event.save(update_fields=['event_status', 'is_active', 'updated_by'])
         return Response({"message": f"Event status updated to {new_status}."})
 
-    # ── 3. PROFILE SEARCH (for adding team members) ───────────────────────────
+    # ── 3. PROFILE SEARCH ───────────────────────────
     @action(detail=False, methods=['get'])
     def search_profiles(self, request):
         q = request.query_params.get('q', '').strip()
@@ -128,10 +125,9 @@ class SamajEventViewSet(viewsets.ModelViewSet):
         except Exception:
             return Response({"error": "You are already registered for this event."}, status=400)
 
-    # ── 5. LEAVE EVENT (self-exit) ────────────────────────────────────────────
+    # ── 5. LEAVE EVENT ────────────────────────────────────────────
     @action(detail=True, methods=['post'])
     def leave(self, request, pk=None):
-        """Participant leaves an event themselves."""
         event = self.get_object()
         if not hasattr(request.user, 'samaj_profile'):
             return Response({"error": "Profile not found."}, status=403)
@@ -151,7 +147,7 @@ class SamajEventViewSet(viewsets.ModelViewSet):
         qs = event.participants.select_related('profile__user').all()
         return Response(EventParticipantSerializer(qs, many=True).data)
 
-    # ── 7. REMOVE PARTICIPANT (admin action) ──────────────────────────────────
+    # ── 7. REMOVE PARTICIPANT ──────────────────────────────────
     @action(detail=True, methods=['delete'], url_path='participants/(?P<participant_id>[^/.]+)')
     def remove_participant(self, request, pk=None, participant_id=None):
         event = self.get_object()
@@ -168,19 +164,20 @@ class SamajEventViewSet(viewsets.ModelViewSet):
         event = self.get_object()
 
         if request.method == 'GET':
-            # Any organizer can VIEW the team
             if not is_event_organizer(event, request.user):
                 return Response({"error": "Access denied."}, status=403)
             organizers = event.organizers.select_related('profile__user').all()
             return Response(EventOrganizerSerializer(organizers, many=True, context={'request': request}).data)
 
         elif request.method == 'POST':
-            # Only Event Admins can ADD members
+            # 🌟 FIX: Uses updated is_event_admin which correctly identifies Abhiyanta
             if not is_event_admin(event, request.user):
                 return Response({"error": "Only Event Admins can add team members."}, status=403)
             samaj_id = request.data.get('samaj_id')
             role_title = request.data.get('role_title', 'Event Member')
-            if role_title not in ['Event Admin', 'Event Member']:
+            
+            # Case insensitive check
+            if role_title.lower() not in ['event admin', 'event member']:
                 return Response({"error": "Invalid role. Choose 'Event Admin' or 'Event Member'."}, status=400)
             try:
                 profile = SamajProfile.objects.get(samaj_id=samaj_id)
@@ -196,22 +193,15 @@ class SamajEventViewSet(viewsets.ModelViewSet):
 
         elif request.method == 'DELETE':
             org_id = request.data.get('organizer_id')
-
-            # Self-leave from team
             if not org_id and hasattr(request.user, 'samaj_profile'):
-                deleted, _ = EventOrganizer.objects.filter(
-                    event=event, profile=request.user.samaj_profile
-                ).delete()
-                if deleted:
-                    return Response({"message": "You have left the event team."})
+                deleted, _ = EventOrganizer.objects.filter(event=event, profile=request.user.samaj_profile).delete()
+                if deleted: return Response({"message": "You have left the event team."})
                 return Response({"error": "You are not on this team."}, status=400)
 
-            # Admin removing someone else
             if not is_event_admin(event, request.user):
                 return Response({"error": "Only Event Admins can remove team members."}, status=403)
             deleted, _ = EventOrganizer.objects.filter(id=org_id, event=event).delete()
-            if deleted:
-                return Response({"message": "Member removed from team."})
+            if deleted: return Response({"message": "Member removed from team."})
             return Response({"error": "Member not found."}, status=404)
 
     # ── 9. CHAT ───────────────────────────────────────────────────────────────
@@ -222,15 +212,13 @@ class SamajEventViewSet(viewsets.ModelViewSet):
             return Response({"error": "Only team members can access this chat."}, status=403)
 
         if request.method == 'GET':
-            msgs = event.chat_messages.select_related('sender__user').all()
+            msgs = event.chat_messages.select_related('sender__user').order_by('created_at')
             return Response(EventChatMessageSerializer(msgs, many=True, context={'request': request}).data)
 
         elif request.method == 'POST':
             msg = request.data.get('message', '').strip()
-            if not msg:
-                return Response({"error": "Message cannot be empty."}, status=400)
-            if not hasattr(request.user, 'samaj_profile'):
-                return Response({"error": "Profile required to send messages."}, status=403)
+            if not msg: return Response({"error": "Message cannot be empty."}, status=400)
+            if not hasattr(request.user, 'samaj_profile'): return Response({"error": "Profile required to send messages."}, status=403)
             EventChatMessage.objects.create(
                 event=event, sender=request.user.samaj_profile, message=msg,
                 created_by=request.user, updated_by=request.user
