@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from .models import Gotra
 from django.contrib.auth import get_user_model
 from django.db.models import Q  
 from .models import (
@@ -122,3 +123,14 @@ class SamajCommitteeSerializer(serializers.ModelSerializer):
     class Meta:
         model = SamajCommittee
         fields = ['id', 'name_en', 'name_hi', 'purpose', 'is_active']
+
+
+
+
+class GotraSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Gotra
+        fields = ['id', 'name_en', 'name_hi']
+
+
+

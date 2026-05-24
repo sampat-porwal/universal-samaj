@@ -6,8 +6,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { 
     Home, Users, Calendar, User, Bell, LogOut, 
     Clock, ShieldAlert, Image as ImageIcon, UploadCloud, 
-    LayoutDashboard, UserCheck, Network, FileSpreadsheet 
-} from 'lucide-react'; // 🌟 Added FileSpreadsheet icon
+    LayoutDashboard, UserCheck, Network, FileSpreadsheet,
+    BookOpen // 🌟 Added BookOpen icon for Gotra
+} from 'lucide-react';
 import api from '@/lib/api';
 
 export default function CommunityLayout({ children }: { children: React.ReactNode }) {
@@ -18,7 +19,7 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
     const [profile, setProfile] = useState<any>(null);
     const [userRole, setUserRole] = useState(''); 
     const [samajStatus, setSamajStatus] = useState('LOADING'); 
-    const [myProfileId, setMyProfileId] = useState<number | null>(null); // 🌟 Added to track current user's Samaj ID for the Tree link
+    const [myProfileId, setMyProfileId] = useState<number | null>(null);
 
     useEffect(() => {
         const checkAuthAndStatus = async () => {
@@ -29,18 +30,16 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
             }
 
             try {
-                // 1. Get User Data
                 const res = await api.get('/auth/profile/');
                 setProfile(res.data);
-                setUserRole(res.data.role?.toUpperCase() || ''); // Ensure uppercase for role checking
+                setUserRole(res.data.role?.toUpperCase() || ''); 
                 
-                // 2. Fetch Samaj Profile to check VERIFICATION STATUS
                 const samajRes = await api.get('/samaj/profiles/'); 
                 const myProfile = samajRes.data.find((p: any) => p.user.username === res.data.username);
                 
                 if (myProfile) {
                     setSamajStatus(myProfile.verification_status);
-                    setMyProfileId(myProfile.id); // 🌟 Save ID for the Tree Button
+                    setMyProfileId(myProfile.id);
                 } else {
                     if (['SUPERADMIN', 'ADMIN', 'SKPUSER', 'SYSTEM_ADMIN'].includes(res.data.role?.toUpperCase())) {
                         setSamajStatus('VERIFIED'); 
@@ -48,7 +47,6 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
                         setSamajStatus('NOT_FOUND');
                     }
                 }
-
             } catch (error) {
                 console.error("Auth failed", error);
                 router.push("/login");
@@ -65,7 +63,6 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
         router.push("/login");
     };
 
-    // 🌟 DEFAULT NAV ITEMS (For Everyone)
     const NAV_ITEMS = [
         { name: 'Feed', path: '/community', icon: <Home size={24} /> },
         { name: 'Directory', path: '/community/directory', icon: <Users size={24} /> },
@@ -74,30 +71,28 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
         { name: 'My Profile', path: '/community/profile', icon: <User size={24} /> },
     ];
 
-    // 🌟 ADD "MY FAMILY TREE" LINK IF USER HAS A SAMAJ PROFILE
     if (myProfileId) {
         NAV_ITEMS.splice(2, 0, { name: 'My Tree', path: `/community/tree/${myProfileId}`, icon: <Network size={24} /> });
     }
 
-    // 🌟 STRICT ROLE FILTER 1: Admins & Core Members get Verify & Bulk Import
+    // 🌟 STRICT ROLE FILTER 1: Admins & Core Members get Verify, Bulk Import AND Manage Gotras
     if (['SUPERADMIN', 'ADMIN', 'CORE_ADMIN', 'CORE_MEMBER', 'SKPUSER'].includes(userRole)) {
         NAV_ITEMS.push({ name: 'Verify Members', path: '/community/verify', icon: <UserCheck size={24} /> });
+        // 👇 NEW MENU ITEM FOR GOTRA
+        NAV_ITEMS.push({ name: 'Manage Gotras', path: '/community/admin/gotras', icon: <BookOpen size={24} /> }); 
         NAV_ITEMS.push({ name: 'Bulk Import', path: '/community/admin/bulk-import', icon: <UploadCloud size={24} /> });
     }
 
-    // 🌟 STRICT ROLE FILTER 2: ONLY Admin, System Admin & SKPUSER get CSV Export/Import
     if (['SUPERADMIN', 'ADMIN', 'SYSTEM_ADMIN', 'SKPUSER'].includes(userRole)) {
         NAV_ITEMS.push({ name: 'CSV Data', path: '/community/admin/csv', icon: <FileSpreadsheet size={24} /> });
     }
 
-    // 🌟 STRICT ROLE FILTER 3: ONLY Top Level (SuperAdmin & Admin) get the "Bridge" to ERP Dashboard
     if (['SUPERADMIN', 'ADMIN', 'SKPUSER'].includes(userRole)) {
         NAV_ITEMS.push({ name: 'ERP Dashboard', path: '/dashboard', icon: <LayoutDashboard size={24} /> });
     }
 
     if (isLoading) return <div className="flex h-screen items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div></div>;
 
-    // 🌟 THE "PENDING" LOCK SCREEN
     if (samajStatus === 'PENDING') {
         return (
             <div className="flex h-screen items-center justify-center bg-gray-50 p-4">
@@ -118,7 +113,6 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
         );
     }
 
-    // 🌟 THE VERIFIED COMMUNITY APP UI
     return (
         <div className="flex h-screen bg-gray-100 font-sans overflow-hidden">
             
@@ -159,8 +153,6 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
 
             {/* MAIN CONTENT AREA */}
             <div className="flex-1 flex flex-col h-full relative">
-                
-                {/* TOP MOBILE HEADER */}
                 <header className="md:hidden h-14 bg-white flex items-center justify-between px-4 border-b border-gray-200 shadow-sm z-10 shrink-0">
                     <h1 className="font-black text-lg text-blue-700 tracking-tight">Samaj Connect</h1>
                     <button className="text-gray-600 relative p-2">
@@ -169,7 +161,6 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
                     </button>
                 </header>
 
-                {/* TOP DESKTOP HEADER */}
                 <header className="hidden md:flex h-16 bg-white items-center justify-between px-8 border-b border-gray-200 shadow-sm z-10 shrink-0">
                     <div className="text-gray-500 font-medium">Welcome back, <span className="font-bold text-gray-900">{profile?.first_name || profile?.username}</span>!</div>
                     <button className="bg-gray-100 p-2 rounded-full text-gray-600 hover:bg-gray-200 transition relative">
@@ -177,12 +168,10 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
                     </button>
                 </header>
 
-                {/* SCROLLABLE PAGE CONTENT */}
                 <main className="flex-1 overflow-y-auto bg-gray-50 pb-20 md:pb-0 custom-scrollbar">
                     {children}
                 </main>
 
-                {/* BOTTOM MOBILE NAVIGATION */}
                 <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 flex justify-around items-center h-16 z-20 pb-safe overflow-x-auto">
                     {NAV_ITEMS.map((item) => {
                         const isActive = pathname === item.path || pathname.startsWith(item.path + '/');

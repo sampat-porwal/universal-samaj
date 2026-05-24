@@ -100,6 +100,15 @@ class SamajBaseModel(models.Model):
 class SamajProfile(SamajBaseModel):
     GENDER_CHOICES = (('M', 'Male'), ('F', 'Female'), ('O', 'Other'))
 
+    # 🌟 NEW: EMPLOYMENT TYPES (Govt, Private, Business)
+    EMPLOYMENT_CHOICES = (
+        ('GOVT', 'Government Job'),
+        ('PRIVATE', 'Private Job'),
+        ('BUSINESS', 'Business / Entrepreneur'),
+        ('SELF', 'Self Employed / Professional'),
+        ('OTHER', 'Other / Retired / Student')
+    )
+
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='samaj_profile')
     
     # Community & Identity (Hindi/English Side-by-side)
@@ -112,6 +121,9 @@ class SamajProfile(SamajBaseModel):
     dob = models.DateField(null=True, blank=True)
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES, default='M')
     
+    # 🌟 NEW: Fast Search Direct Field (Blood Group)
+    blood_group = models.CharField(max_length=5, blank=True, null=True)
+    
     # Media: Self Image
     profile_image = models.ImageField(upload_to='samaj_profiles/', null=True, blank=True)
 
@@ -122,12 +134,17 @@ class SamajProfile(SamajBaseModel):
     address_2 = models.TextField(blank=True, null=True)
     address_3 = models.TextField(blank=True, null=True)
     
-    # Career & Education (Hindi support)
-    occupation_en = models.CharField(max_length=255, blank=True, null=True)
+    # 🌟 UPGRADED: Career & Business Management
+    employment_type = models.CharField(max_length=20, choices=EMPLOYMENT_CHOICES, default='OTHER')
+    occupation_en = models.CharField(max_length=255, blank=True, null=True, help_text="Designation or Profession")
     occupation_hi = models.CharField(max_length=255, blank=True, null=True)
-    business_name = models.CharField(max_length=255, blank=True, null=True)
+    business_name = models.CharField(max_length=255, blank=True, null=True, help_text="Company or Business Name")
+    work_address = models.TextField(blank=True, null=True, help_text="Office or Shop Address")
     education = models.CharField(max_length=255, blank=True, null=True)
     
+    # 🌟 NEW: Unlimited Custom Attributes (JSON Field)
+    extra_details = models.JSONField(default=dict, blank=True, help_text="Store unlimited custom attributes like Hobbies, Social Links, etc.")
+
     # Status & Security Verification
     is_alive = models.BooleanField(default=True)
     verification_status = models.CharField(max_length=20, choices=(('PENDING', 'Pending'), ('VERIFIED', 'Verified'), ('REJECTED', 'Rejected')), default='PENDING')
@@ -135,7 +152,7 @@ class SamajProfile(SamajBaseModel):
     # Existing core member flag
     is_core_member = models.BooleanField(default=False, help_text="Can verify other pending members")
 
-    # 🌟 NEW: TRACK BULK VS SELF IMPORT
+    # TRACK BULK VS SELF IMPORT
     REG_SOURCE_CHOICES = (
         ('SELF', 'Self Registered'),
         ('BULK', 'Bulk Import by Admin'),
@@ -148,8 +165,6 @@ class SamajProfile(SamajBaseModel):
     # Recursive Family Tree
     father = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='child_f')
     mother = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='child_m')
-    
-    # 🌟 UPGRADED: Changed from ForeignKey to ManyToManyField to handle multiple spouses (0.001% edge case)
     spouses = models.ManyToManyField('self', blank=True)
 
     def __str__(self):
@@ -264,3 +279,16 @@ class FamilyLinkRequest(SamajBaseModel):
 
     def __str__(self):
         return f"{self.sender.user.first_name} requested {self.receiver.user.first_name} as {self.relation_type} ({self.status})"
+    
+
+
+
+
+
+
+class Gotra(models.Model):
+    name_en = models.CharField(max_length=100, unique=True)
+    name_hi = models.CharField(max_length=100, blank=True, null=True)
+
+    def __str__(self):
+        return self.name_en

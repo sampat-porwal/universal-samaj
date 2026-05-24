@@ -442,3 +442,17 @@ class SamajProfileViewSet(viewsets.ModelViewSet):
 
         except Exception as e:
             return Response({"error": f"Import failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+
+
+
+
+# from .models import Gotra
+# from .serializers import GotraSerializer
+
+# class GotraViewSet(viewsets.ModelViewSet):
+#     queryset = Gotra.objects.all().order_by('name_en')
+#     serializer_class = GotraSerializer
+#     # NOTE: Set permissions so all verified users can GET (read), 
+#     # but only Admin/Core Members can POST/PUT/DELETE.
