@@ -1,168 +1,185 @@
 "use client";
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Calendar, Users, Megaphone, Heart, MessageSquare, Share2, Award, MapPin } from 'lucide-react';
+import { 
+    Users, Calendar, Droplets, Briefcase, 
+    MapPin, BookOpen, Activity, Loader2, Trophy
+} from 'lucide-react';
 import api from '@/lib/api';
 
-export default function CommunityFeedPage() {
-    const [profile, setProfile] = useState<any>(null);
+interface DashboardData {
+    overview: {
+        total_members: number;
+        active_events: number;
+        completed_events: number;
+        total_blood_donations: number;
+    };
+    demographics: {
+        top_villages: { village_en: string; total: number }[];
+        top_gotras: { gotra_en: string; total: number }[];
+        employment: { employment_type: string; total: number }[];
+    };
+}
+
+export default function SamajDashboard() {
+    const [data, setData] = useState<DashboardData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        const fetchUserData = async () => {
+        const fetchDashboardData = async () => {
             try {
-                const res = await api.get('/auth/profile/');
-                setProfile(res.data);
+                const res = await api.get('/samaj/dashboard-stats/');
+                setData(res.data);
             } catch (error) {
-                console.error("Failed to load user profile", error);
+                console.error("Failed to load dashboard data", error);
             } finally {
                 setIsLoading(false);
             }
         };
-        fetchUserData();
+        fetchDashboardData();
     }, []);
-
-    // 🌟 DUMMY POSTS (Later we will fetch this from backend)
-    const FEED_POSTS = [
-        {
-            id: 1,
-            author: "Samaj Core Committee",
-            time: "2 hours ago",
-            content: "Samuhik Vivah Sammelan 2026 is officially announced! Registrations for brides and grooms will open next week. Please share this with all relatives.",
-            likes: 124,
-            comments: 18,
-            isOfficial: true
-        },
-        {
-            id: 2,
-            author: "Ramesh Sharma",
-            time: "5 hours ago",
-            content: "Very proud to announce that my daughter secured 95% in her 12th Board Exams. Thank you everyone for your blessings! 🙏",
-            likes: 89,
-            comments: 42,
-            isOfficial: false
-        }
-    ];
 
     if (isLoading) {
         return (
-            <div className="p-6 max-w-3xl mx-auto space-y-4">
-                <div className="h-32 bg-gray-200 rounded-2xl animate-pulse"></div>
-                <div className="h-64 bg-gray-200 rounded-2xl animate-pulse"></div>
+            <div className="flex h-[60vh] items-center justify-center">
+                <Loader2 size={48} className="animate-spin text-blue-600" />
             </div>
         );
     }
 
+    if (!data) return null;
+
+    // Helper to format employment labels
+    const formatEmployment = (type: string) => {
+        const labels: Record<string, string> = {
+            GOVT: 'Government', PRIVATE: 'Private Sector', 
+            BUSINESS: 'Business', SELF: 'Self Employed', OTHER: 'Other'
+        };
+        return labels[type] || type;
+    };
+
     return (
-        <div className="p-4 md:p-6 max-w-4xl mx-auto font-sans">
+        <div className="p-4 md:p-6 max-w-6xl mx-auto font-sans space-y-6">
             
-            {/* 🌟 WELCOME BANNER */}
-            <div className="bg-gradient-to-r from-blue-600 to-blue-800 rounded-3xl p-6 md:p-8 text-white shadow-lg mb-8 flex flex-col md:flex-row items-center justify-between gap-6">
+            {/* ── HEADER ── */}
+            <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-sm font-bold text-blue-200 uppercase tracking-widest mb-1">Welcome to Samaj Connect</h2>
-                    <h1 className="text-3xl md:text-4xl font-black mb-2">Namaste, {profile?.first_name}! 🙏</h1>
-                    <p className="text-blue-100 font-medium max-w-md leading-relaxed">
-                        Stay connected with your community. See latest updates, find members in the directory, and participate in upcoming events.
-                    </p>
-                </div>
-                <div className="hidden md:flex flex-col gap-3 w-full md:w-auto">
-                    <Link href="/community/directory" className="bg-white text-blue-700 px-6 py-3 rounded-xl font-bold shadow-sm hover:bg-blue-50 transition flex items-center justify-center gap-2">
-                        <Users size={18} /> View Directory
-                    </Link>
-                    <Link href="/community/events" className="bg-blue-700 border border-blue-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-600 transition flex items-center justify-center gap-2">
-                        <Calendar size={18} /> Samaj Events
-                    </Link>
+                    <h1 className="text-2xl md:text-3xl font-black text-gray-900">Community Dashboard</h1>
+                    <p className="text-gray-500 font-medium mt-1">Live metrics and demographics from the Samaj database.</p>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                
-                {/* 🌟 LEFT COLUMN: NEWS FEED */}
-                <div className="lg:col-span-2 space-y-6">
-                    <h3 className="text-xl font-black text-gray-800 flex items-center gap-2 mb-4">
-                        <Megaphone className="text-blue-600" /> Community Updates
-                    </h3>
-
-                    {/* CREATE POST INPUT (UI Only for now) */}
-                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex gap-4 items-center">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-black shrink-0">
-                            {profile?.first_name?.charAt(0) || 'U'}
-                        </div>
-                        <input 
-                            type="text" 
-                            placeholder="Share an update or news with the Samaj..." 
-                            className="w-full bg-gray-50 border border-gray-200 rounded-full px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                        />
+            {/* ── TOP STATS CARDS ── */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                        <Users size={24} />
                     </div>
-
-                    {/* FEED ITEMS */}
-                    {FEED_POSTS.map((post) => (
-                        <div key={post.id} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-black ${post.isOfficial ? 'bg-purple-600' : 'bg-gray-400'}`}>
-                                        {post.author.charAt(0)}
-                                    </div>
-                                    <div>
-                                        <h4 className="font-bold text-gray-900 flex items-center gap-1">
-                                            {post.author} 
-                                            {post.isOfficial && <Award size={14} className="text-blue-500" fill="currentColor" />}
-                                        </h4>
-                                        <p className="text-xs text-gray-500 font-medium">{post.time}</p>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <p className="text-gray-700 font-medium mb-4 leading-relaxed">
-                                {post.content}
-                            </p>
-
-                            <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                                <button className="flex items-center gap-2 text-gray-500 hover:text-red-500 font-bold transition">
-                                    <Heart size={18} /> {post.likes}
-                                </button>
-                                <button className="flex items-center gap-2 text-gray-500 hover:text-blue-500 font-bold transition">
-                                    <MessageSquare size={18} /> {post.comments} Comments
-                                </button>
-                                <button className="flex items-center gap-2 text-gray-500 hover:text-green-500 font-bold transition">
-                                    <Share2 size={18} /> Share
-                                </button>
-                            </div>
-                        </div>
-                    ))}
+                    <div>
+                        <p className="text-xs font-black text-gray-400 uppercase tracking-wide">Verified Members</p>
+                        <h3 className="text-2xl font-black text-gray-900">{data.overview.total_members}</h3>
+                    </div>
                 </div>
 
-                {/* 🌟 RIGHT COLUMN: WIDGETS */}
-                <div className="space-y-6">
-                    {/* Event Widget */}
-                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                        <h3 className="font-black text-gray-800 mb-4 flex items-center gap-2">
-                            <Calendar size={18} className="text-blue-600" /> Upcoming Event
-                        </h3>
-                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                            <h4 className="font-bold text-blue-900 mb-1">Samuhik Vivah 2026</h4>
-                            <p className="text-sm text-blue-700 font-medium mb-3 flex items-center gap-1"><MapPin size={14}/> Bhilwara Main Ground</p>
-                            <button className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg text-sm hover:bg-blue-700 transition">
-                                View Details
-                            </button>
-                        </div>
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center text-green-600">
+                        <Calendar size={24} />
                     </div>
+                    <div>
+                        <p className="text-xs font-black text-gray-400 uppercase tracking-wide">Active Events</p>
+                        <h3 className="text-2xl font-black text-gray-900">{data.overview.active_events}</h3>
+                    </div>
+                </div>
 
-                    {/* Stats Widget */}
-                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                        <h3 className="font-black text-gray-800 mb-4 flex items-center gap-2">
-                            <Users size={18} className="text-purple-600" /> Samaj Stats
-                        </h3>
-                        <div className="space-y-3">
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-600 font-medium text-sm">Total Verified Families</span>
-                                <span className="font-black text-gray-900">1,240</span>
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center text-red-500">
+                        <Droplets size={24} />
+                    </div>
+                    <div>
+                        <p className="text-xs font-black text-gray-400 uppercase tracking-wide">Blood Donations</p>
+                        <h3 className="text-2xl font-black text-gray-900">{data.overview.total_blood_donations}</h3>
+                    </div>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+                        <Trophy size={24} />
+                    </div>
+                    <div>
+                        <p className="text-xs font-black text-gray-400 uppercase tracking-wide">Completed Events</p>
+                        <h3 className="text-2xl font-black text-gray-900">{data.overview.completed_events}</h3>
+                    </div>
+                </div>
+            </div>
+
+            {/* ── DEMOGRAPHICS GRID ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Top Villages / Cities */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                    <h3 className="font-black text-gray-800 border-b pb-3 mb-4 flex items-center gap-2">
+                        <MapPin size={18} className="text-blue-600" /> Top Cities & Villages
+                    </h3>
+                    <div className="space-y-4">
+                        {data.demographics.top_villages.map((item, idx) => (
+                            <div key={idx} className="flex items-center justify-between">
+                                <span className="font-bold text-gray-700">{item.village_en}</span>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                        <div 
+                                            className="h-full bg-blue-500 rounded-full" 
+                                            style={{ width: `${(item.total / data.overview.total_members) * 100}%` }}
+                                        />
+                                    </div>
+                                    <span className="text-sm font-black text-gray-900 w-8 text-right">{item.total}</span>
+                                </div>
                             </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-600 font-medium text-sm">New Members This Week</span>
-                                <span className="font-black text-green-600">+12</span>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Top Gotras */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                    <h3 className="font-black text-gray-800 border-b pb-3 mb-4 flex items-center gap-2">
+                        <BookOpen size={18} className="text-purple-600" /> Major Gotras
+                    </h3>
+                    <div className="space-y-4">
+                        {data.demographics.top_gotras.map((item, idx) => (
+                            <div key={idx} className="flex items-center justify-between">
+                                <span className="font-bold text-gray-700">{item.gotra_en}</span>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                        <div 
+                                            className="h-full bg-purple-500 rounded-full" 
+                                            style={{ width: `${(item.total / data.overview.total_members) * 100}%` }}
+                                        />
+                                    </div>
+                                    <span className="text-sm font-black text-gray-900 w-8 text-right">{item.total}</span>
+                                </div>
                             </div>
-                        </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Employment Breakdown */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                    <h3 className="font-black text-gray-800 border-b pb-3 mb-4 flex items-center gap-2">
+                        <Briefcase size={18} className="text-orange-500" /> Career Sectors
+                    </h3>
+                    <div className="space-y-4">
+                        {data.demographics.employment.map((item, idx) => (
+                            <div key={idx} className="flex items-center justify-between">
+                                <span className="font-bold text-gray-700">{formatEmployment(item.employment_type)}</span>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                        <div 
+                                            className="h-full bg-orange-400 rounded-full" 
+                                            style={{ width: `${(item.total / data.overview.total_members) * 100}%` }}
+                                        />
+                                    </div>
+                                    <span className="text-sm font-black text-gray-900 w-8 text-right">{item.total}</span>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
 

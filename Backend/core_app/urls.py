@@ -15,7 +15,8 @@ from .role_views import CustomRoleView, StaffView, StaffDetailView, AuditLogView
 from .settings_views import SettingsSchemaView
 from .ai_views import UniversalAIChatView
 from .finance_views import UniversalPaymentView
-from .views import HealthCheckView
+
+from .views import DashboardAnalyticsView # Make sure this is imported
 
 # ── SAMAJ IMPORTS ────────────────────────────────────────────────────────────
 from .samaj_profile_views import SamajProfileViewSet
@@ -23,7 +24,6 @@ from .samaj_media_views import FamilyAlbumViewSet
 from .samaj_committee_views import SamajCommitteeViewSet
 from .tree_views import SamajFamilyTreeView
 from .samaj_csv_views import SamajCSVExportView, SamajCSVImportView  
-# Make sure this matches where you actually put the GotraViewSet
 from .views import GotraViewSet  
 
 # 🌟 SAMAJ VIEWSET ROUTER
@@ -31,15 +31,12 @@ samaj_router = DefaultRouter()
 samaj_router.register(r'profiles', SamajProfileViewSet, basename='samaj-profile')
 samaj_router.register(r'albums', FamilyAlbumViewSet, basename='samaj-album')
 samaj_router.register(r'committees', SamajCommitteeViewSet, basename='samaj-committee')
-samaj_router.register(r'gotras', GotraViewSet, basename='samaj-gotra') # Added basename
+samaj_router.register(r'gotras', GotraViewSet, basename='samaj-gotra')
 
 # ═════════════════════════════════════════════════════════════════════════════
 # URL PATTERNS
 # ═════════════════════════════════════════════════════════════════════════════
 urlpatterns = [
-    # 🟢 HEALTH CHECK
-    path('health/', HealthCheckView.as_view(), name='api-health'),
-
     # 🔐 AUTH & SECURITY
     path('auth/register/', UniversalRegisterView.as_view(), name='api-register'),
     path('auth/login/', UniversalLoginView.as_view(), name='api-login'),
@@ -63,6 +60,9 @@ urlpatterns = [
     # 🏛️ SAMAJ ADVANCED MODULES
     # 1. ViewSets (Profiles, Albums, Committees, Gotras)
     path('samaj/', include(samaj_router.urls)),
+    
+    # 🌟 NEW: Dashboard Stats API (Moved here with samaj/ prefix)
+    path('samaj/dashboard-stats/', DashboardAnalyticsView.as_view(), name='samaj-dashboard-stats'),
     
     # 2. Family Tree
     path('samaj/tree/<int:profile_id>/', SamajFamilyTreeView.as_view(), name='api-family-tree'),

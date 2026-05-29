@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     MapPin, Phone, Mail, ShieldCheck, Heart, Edit, Camera,
-    X, Search, Clock, Users, AlertTriangle,
-    Briefcase, Star, PlusCircle, Globe, Building2,
+    X, Search, Clock, CheckCircle, Users, AlertTriangle,
+    Briefcase, Star, PlusCircle, Activity, Globe, Building2,
     UserCheck, Network, UserPlus, Droplets, GraduationCap,
     ArrowRight, Baby
 } from 'lucide-react';
@@ -254,20 +254,21 @@ export default function MyProfilePage() {
 
             {/* ── HERO CARD ── */}
             <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-6">
-                <div className="h-28 md:h-36 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 relative">
-                    {/* Dead/Alive indicator */}
+                {/* Banner — inline style guarantees rendering */}
+                <div style={{ height: 90, background: 'linear-gradient(135deg, #1d4ed8 0%, #7c3aed 100%)', position: 'relative', flexShrink: 0 }}>
                     {!samajProfile?.is_alive && (
-                        <div className="absolute top-4 left-4 bg-gray-900/70 text-white text-xs font-black px-3 py-1.5 rounded-full backdrop-blur-sm">
+                        <div style={{ position: 'absolute', top: 10, left: 12, background: 'rgba(0,0,0,0.6)', color: 'white', fontSize: 11, fontWeight: 900, padding: '4px 10px', borderRadius: 20 }}>
                             🕊️ स्वर्गीय / Late
                         </div>
                     )}
                 </div>
 
-                <div className="px-6 md:px-8 pb-6 relative">
-                    <div className="flex flex-col md:flex-row md:items-end gap-4 -mt-14 md:-mt-16 mb-4">
+                <div className="px-5 pb-5">
+                    {/* Photo + Edit button row */}
+                    <div className="flex items-end justify-between -mt-12 mb-3">
                         {/* Profile photo */}
-                        <div className="relative shrink-0 z-10" style={{ width: 110, height: 110 }}>
-                            <div style={{ width: 110, height: 110, borderRadius: '50%', overflow: 'hidden', border: '5px solid white', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, fontWeight: 900, color: '#1d4ed8' }}>
+                        <div className="relative z-10" style={{ width: 96, height: 96 }}>
+                            <div style={{ width: 96, height: 96, borderRadius: '50%', overflow: 'hidden', border: '4px solid white', boxShadow: '0 4px 16px rgba(0,0,0,0.18)', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, fontWeight: 900, color: '#1d4ed8' }}>
                                 {samajProfile?.profile_image ? (
                                     <img src={getImgUrl(samajProfile.profile_image)} alt=""
                                         style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }} />
@@ -276,58 +277,79 @@ export default function MyProfilePage() {
                                 )}
                             </div>
                             <button onClick={() => fileInputRef.current?.click()}
-                                className="absolute bottom-0.5 right-0.5 bg-blue-600 text-white p-2 rounded-full border-4 border-white hover:bg-blue-700 transition shadow-lg z-20">
-                                <Camera size={16} />
+                                style={{ position: 'absolute', bottom: 2, right: 2, background: '#2563eb', color: 'white', border: '3px solid white', borderRadius: '50%', padding: 6, cursor: 'pointer', zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                title="Change photo">
+                                <Camera size={14} />
                             </button>
                         </div>
 
-                        {/* Text Content & Edit Button Area */}
-                        <div className="flex-1 md:mb-2 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-                            <div>
-                                <div className="flex flex-wrap items-center gap-2 mb-1">
-                                    <h1 className="text-2xl md:text-3xl font-black text-gray-900">
-                                        {authProfile?.first_name} {authProfile?.last_name}
-                                    </h1>
-                                    {!samajProfile?.is_alive && (
-                                        <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full font-black">Late</span>
-                                    )}
-                                </div>
-                                <div className="flex flex-wrap gap-2 items-center">
-                                    <span className="text-sm font-bold text-gray-400">{samajProfile?.samaj_id}</span>
-                                    <span className="text-gray-300">·</span>
-                                    <span className="text-sm font-bold text-gray-500">{samajProfile?.village_en}</span>
-                                    {samajProfile?.gotra_en && <>
-                                        <span className="text-gray-300">·</span>
-                                        <span className="text-sm font-bold text-gray-500">{samajProfile.gotra_en} Gotra</span>
-                                    </>}
-                                </div>
-                                <div className="flex flex-wrap gap-2 mt-3">
-                                    <RoleBadge role={authProfile?.role} />
-                                    {samajProfile?.verification_status === 'VERIFIED' && (
-                                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-green-50 text-green-700 border border-green-200">
-                                            <ShieldCheck size={12} /> Verified
-                                        </span>
-                                    )}
-                                    {samajProfile?.is_core_member && (
-                                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-yellow-50 text-yellow-700 border border-yellow-200">
-                                            <Star size={12} /> Core Member
-                                        </span>
-                                    )}
-                                    {samajProfile?.blood_group && (
-                                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-red-50 text-red-600 border border-red-200">
-                                            <Droplets size={12} /> {samajProfile.blood_group}
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* NEW EDIT BUTTON PLACEMENT (Impossible to hide) */}
-                            <button onClick={() => router.push('/community/profile/edit')}
-                                className="bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white border border-blue-200 hover:border-blue-600 px-5 py-2.5 rounded-xl transition flex items-center justify-center gap-2 text-sm font-black shrink-0 w-full md:w-auto">
-                                <Edit size={16} /> Edit Profile
-                            </button>
-                        </div>
+                        {/* Edit Profile button — always visible */}
+                        <button
+                            onClick={() => router.push('/community/profile/edit')}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#2563eb', color: 'white', fontWeight: 700, fontSize: 13, padding: '8px 16px', borderRadius: 12, border: 'none', cursor: 'pointer', boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
+                        >
+                            <Edit size={14} /> Edit Profile
+                        </button>
                     </div>
+
+                    {/* Name + meta */}
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <h1 className="text-xl font-black text-gray-900">
+                            {authProfile?.first_name} {authProfile?.last_name}
+                        </h1>
+                        {!samajProfile?.is_alive && (
+                            <span className="text-xs bg-gray-700 text-gray-200 px-2 py-0.5 rounded-full font-black">स्वर्गीय</span>
+                        )}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 items-center text-sm text-gray-400 font-medium mb-3">
+                        <span className="font-bold text-gray-600">{samajProfile?.samaj_id}</span>
+                        {samajProfile?.village_en && <><span>·</span><span>{samajProfile.village_en}</span></>}
+                        {samajProfile?.gotra_en && <><span>·</span><span>{samajProfile.gotra_en} Gotra</span></>}
+                    </div>
+
+                    {/* Badges */}
+                    <div className="flex flex-wrap gap-2">
+                                <RoleBadge role={authProfile?.role} />
+                                {samajProfile?.verification_status === 'VERIFIED' && (
+                                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-green-50 text-green-700 border border-green-200">
+                                        <ShieldCheck size={12} /> Verified
+                                    </span>
+                                )}
+                                {samajProfile?.is_core_member && (
+                                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-yellow-50 text-yellow-700 border border-yellow-200">
+                                        <Star size={12} /> Core Member
+                                    </span>
+                                )}
+                                {samajProfile?.blood_group && (
+                                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-red-50 text-red-600 border border-red-200">
+                                        <Droplets size={12} /> {samajProfile.blood_group}
+                                    </span>
+                                )}
+                                {/* Marital status badge */}
+                                {samajProfile?.marital_status && (() => {
+                                    const MS: Record<string, { emoji: string; label: string; cls: string }> = {
+                                        UNMARRIED:  { emoji: '🧑',  label: 'Unmarried',  cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+                                        MARRIED:    { emoji: '💑',  label: 'Married',    cls: 'bg-pink-50 text-pink-700 border-pink-200' },
+                                        WIDOWER:    { emoji: '🕊️', label: 'Widower',    cls: 'bg-gray-100 text-gray-600 border-gray-300' },
+                                        WIDOW:      { emoji: '🕊️', label: 'Widow',      cls: 'bg-gray-100 text-gray-600 border-gray-300' },
+                                        DIVORCED:   { emoji: '⚖️',  label: 'Divorced',   cls: 'bg-orange-50 text-orange-700 border-orange-200' },
+                                        SEPARATED:  { emoji: '↔️',  label: 'Separated',  cls: 'bg-orange-50 text-orange-700 border-orange-200' },
+                                        REMARRIED:  { emoji: '💒',  label: 'Remarried',  cls: 'bg-purple-50 text-purple-700 border-purple-200' },
+                                    };
+                                    const m = MS[samajProfile.marital_status];
+                                    return m ? (
+                                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black border ${m.cls}`}>
+                                            {m.emoji} {m.label}
+                                        </span>
+                                    ) : null;
+                                })()}
+                                {/* Deceased badge */}
+                                {!samajProfile?.is_alive && (
+                                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-gray-800 text-gray-200 border border-gray-700">
+                                        🕊️ स्वर्गीय
+                                    </span>
+                                )}
+                            </div>
                 </div>
             </div>
 
@@ -370,6 +392,46 @@ export default function MyProfilePage() {
                             <div className="flex items-center gap-3">
                                 <Users size={14} className="text-gray-400 shrink-0" />
                                 <span className="text-sm font-bold text-gray-900">{samajProfile.gender === 'M' ? 'Male' : samajProfile.gender === 'F' ? 'Female' : 'Other'}</span>
+                            </div>
+                        )}
+                        {/* Marital status */}
+                        {samajProfile?.marital_status && (
+                            <div className="flex items-center gap-3">
+                                <Heart size={14} className="text-pink-400 shrink-0" />
+                                <span className="text-sm font-bold text-gray-900">
+                                    {{
+                                        UNMARRIED: '🧑 Unmarried / अविवाहित',
+                                        MARRIED:   '💑 Married / विवाहित',
+                                        WIDOWER:   '🕊️ Widower / विधुर',
+                                        WIDOW:     '🕊️ Widow / विधवा',
+                                        DIVORCED:  '⚖️ Divorced / तलाकशुदा',
+                                        SEPARATED: '↔️ Separated / अलग',
+                                        REMARRIED: '💒 Remarried / पुनर्विवाहित',
+                                    }[samajProfile.marital_status] || samajProfile.marital_status}
+                                </span>
+                            </div>
+                        )}
+                        {/* Marriage date */}
+                        {samajProfile?.marriage_date && ['MARRIED','REMARRIED'].includes(samajProfile.marital_status) && (
+                            <div className="flex items-center gap-3">
+                                <Baby size={14} className="text-pink-300 shrink-0" />
+                                <span className="text-sm font-bold text-gray-600">
+                                    Married on: {new Date(samajProfile.marriage_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </span>
+                            </div>
+                        )}
+                        {/* Deceased info */}
+                        {!samajProfile?.is_alive && (
+                            <div className="mt-2 bg-gray-800 rounded-xl p-3 space-y-1">
+                                <p className="text-xs font-black text-gray-300 uppercase tracking-wide">🕊️ Deceased / स्वर्गीय</p>
+                                {samajProfile.death_date && (
+                                    <p className="text-sm text-gray-300 font-bold">
+                                        Date: {new Date(samajProfile.death_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
+                                    </p>
+                                )}
+                                {samajProfile.death_reason && (
+                                    <p className="text-xs text-gray-400 font-medium">{samajProfile.death_reason}</p>
+                                )}
                             </div>
                         )}
                     </div>

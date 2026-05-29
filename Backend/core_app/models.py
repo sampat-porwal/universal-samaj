@@ -113,16 +113,16 @@ class SamajProfile(SamajBaseModel):
     
     # Community & Identity (Hindi/English Side-by-side)
     samaj_id = models.CharField(max_length=50, unique=True)
-    gotra_en = models.CharField(max_length=100, blank=True, null=True)
+    gotra_en = models.CharField(max_length=100, blank=True, null=True, db_index=True)
     gotra_hi = models.CharField(max_length=100, blank=True, null=True)
-    village_en = models.CharField(max_length=100, blank=True, null=True)
+    village_en = models.CharField(max_length=100, blank=True, null=True, db_index=True)
     village_hi = models.CharField(max_length=100, blank=True, null=True)
     
-    dob = models.DateField(null=True, blank=True)
+    dob = models.DateField(null=True, blank=True, db_index=True)
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES, default='M')
     
     # 🌟 NEW: Fast Search Direct Field (Blood Group)
-    blood_group = models.CharField(max_length=5, blank=True, null=True)
+    blood_group = models.CharField(max_length=5, blank=True, null=True, db_index=True)
     
     # Media: Self Image
     profile_image = models.ImageField(upload_to='samaj_profiles/', null=True, blank=True)
@@ -135,10 +135,10 @@ class SamajProfile(SamajBaseModel):
     address_3 = models.TextField(blank=True, null=True)
     
     # 🌟 UPGRADED: Career & Business Management
-    employment_type = models.CharField(max_length=20, choices=EMPLOYMENT_CHOICES, default='OTHER')
+    employment_type = models.CharField(max_length=20, choices=EMPLOYMENT_CHOICES, default='OTHER', db_index=True)
     occupation_en = models.CharField(max_length=255, blank=True, null=True, help_text="Designation or Profession")
     occupation_hi = models.CharField(max_length=255, blank=True, null=True)
-    business_name = models.CharField(max_length=255, blank=True, null=True, help_text="Company or Business Name")
+    business_name = models.CharField(max_length=255, blank=True, null=True, help_text="Company or Business Name", db_index=True)
     work_address = models.TextField(blank=True, null=True, help_text="Office or Shop Address")
     education = models.CharField(max_length=255, blank=True, null=True)
     
@@ -146,8 +146,46 @@ class SamajProfile(SamajBaseModel):
     extra_details = models.JSONField(default=dict, blank=True, help_text="Store unlimited custom attributes like Hobbies, Social Links, etc.")
 
     # Status & Security Verification
-    is_alive = models.BooleanField(default=True)
-    verification_status = models.CharField(max_length=20, choices=(('PENDING', 'Pending'), ('VERIFIED', 'Verified'), ('REJECTED', 'Rejected')), default='PENDING')
+    # is_alive = models.BooleanField(default=True)
+
+
+
+    MARITAL_STATUS_CHOICES = (
+        ('UNMARRIED',     'Unmarried / अविवाहित'),
+        ('MARRIED',       'Married / विवाहित'),
+        ('WIDOW_WIDOWER', 'Widow/Widower / विधवा/विधुर'),       # Merged spouse died
+        ('DIVORCED',      'Divorced / तलाकशुदा'),
+        ('SEPARATED',     'Separated / अलग'),
+        ('REMARRIED',     'Remarried / पुनर्विवाहित'),
+    )
+ 
+    # ── Alive / Dead ──────────────────────────────────────────────
+    is_alive = models.BooleanField(default=True, db_index=True)
+    death_date = models.DateField(
+        null=True, blank=True,
+        help_text="Date of death (if not alive)"
+    )
+    death_reason = models.CharField(
+        max_length=255, blank=True, null=True,
+        help_text="Brief reason or cause of death (optional)"
+    )
+ 
+    # ── Marital Status ────────────────────────────────────────────
+    marital_status = models.CharField(
+        max_length=20,
+        choices=MARITAL_STATUS_CHOICES,
+        default='UNMARRIED',
+        help_text="Current marital status — important for matrimonial matching",
+        db_index=True
+    )
+    marriage_date = models.DateField(
+        null=True, blank=True,
+        help_text="Marriage date (for anniversary reminders)"
+    )
+
+
+
+    verification_status = models.CharField(max_length=20, choices=(('PENDING', 'Pending'), ('VERIFIED', 'Verified'), ('REJECTED', 'Rejected')), default='PENDING', db_index=True)
     
     # Existing core member flag
     is_core_member = models.BooleanField(default=False, help_text="Can verify other pending members")
@@ -280,11 +318,6 @@ class FamilyLinkRequest(SamajBaseModel):
     def __str__(self):
         return f"{self.sender.user.first_name} requested {self.receiver.user.first_name} as {self.relation_type} ({self.status})"
     
-
-
-
-
-
 
 class Gotra(models.Model):
     name_en = models.CharField(max_length=100, unique=True)
