@@ -328,13 +328,19 @@ class Gotra(models.Model):
 
 
 
+
+
 class SamajAnnouncement(SamajBaseModel):
     title = models.CharField(max_length=255)
     content = models.TextField()
     is_important = models.BooleanField(default=False)
+    
+    # 🌟 NEW: File Upload Fields
+    image = models.ImageField(upload_to='announcements/images/', blank=True, null=True, help_text="Upload invitation cards or event photos")
+    document = models.FileField(upload_to='announcements/docs/', blank=True, null=True, help_text="Upload PDFs like Samaj magazines or rulebooks")
 
     class Meta:
-        ordering = ['-created_at'] # Newest first
+        ordering = ['-created_at']
 
     def __str__(self):
         return self.title

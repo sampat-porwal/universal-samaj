@@ -76,13 +76,15 @@ class DashboardAnalyticsView(APIView):
 
 
 # 1. Serializer
+
 class SamajAnnouncementSerializer(serializers.ModelSerializer):
     author_name = serializers.SerializerMethodField()
     author_role = serializers.SerializerMethodField()
 
     class Meta:
         model = SamajAnnouncement
-        fields = ['id', 'title', 'content', 'is_important', 'created_at', 'author_name', 'author_role']
+        # 🌟 ADDED 'image' and 'document' below:
+        fields = ['id', 'title', 'content', 'is_important', 'image', 'document', 'created_at', 'author_name', 'author_role']
 
     def get_author_name(self, obj):
         if obj.created_by:

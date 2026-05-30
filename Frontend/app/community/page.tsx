@@ -1,13 +1,20 @@
 "use client";
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { 
     Calendar, Users, Megaphone, Heart, 
     Share2, Award, MapPin, BarChart3, 
     Droplets, Briefcase, BookOpen, Trophy, 
-    Loader2, FileText, Trash2, Edit 
+    Loader2, FileText, Trash2, Edit, 
+    Image as ImageIcon, Paperclip // 🌟 Added icons for file uploads
 } from 'lucide-react';
 import api from '@/lib/api';
+
+// 🌟 Helper to fix local media URLs
+const getFileUrl = (path: string) => {
+    if (!path) return '';
+    return path.startsWith('http') ? path : `http://127.0.0.1:8000${path}`;
+};
 
 // Interfaces for our data
 interface DashboardData {
@@ -29,6 +36,8 @@ interface Announcement {
     title: string;
     content: string;
     is_important: boolean;
+    image: string | null;     // 🌟 Added image
+    document: string | null;  // 🌟 Added document
     created_at: string;
     author_name: string;
     author_role: string;
@@ -47,6 +56,13 @@ export default function CommunityHomePage() {
     const [newsTitle, setNewsTitle] = useState('');
     const [newsContent, setNewsContent] = useState('');
     const [isImportant, setIsImportant] = useState(false);
+    
+    // 🌟 States for File Uploads
+    const [newsImage, setNewsImage] = useState<File | null>(null);
+    const [newsDocument, setNewsDocument] = useState<File | null>(null);
+    const imageInputRef = useRef<HTMLInputElement>(null);
+    const documentInputRef = useRef<HTMLInputElement>(null);
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null); // Tracks if we are updating a post
     
@@ -75,25 +91,29 @@ export default function CommunityHomePage() {
         }
     };
 
-    // 🌟 Handle Post AND Update
+    // 🌟 Handle Post AND Update (Now using FormData for files!)
     const handlePostNews = async () => {
         if (!newsTitle.trim() || !newsContent.trim()) return;
         setIsSubmitting(true);
+        
+        // Use FormData to allow image/pdf uploads
+        const formData = new FormData();
+        formData.append('title', newsTitle);
+        formData.append('content', newsContent);
+        formData.append('is_important', isImportant ? 'true' : 'false');
+        
+        if (newsImage) formData.append('image', newsImage);
+        if (newsDocument) formData.append('document', newsDocument);
+
         try {
+            const config = { headers: { 'Content-Type': 'multipart/form-data' } };
+
             if (editingId) {
                 // UPDATE existing news
-                await api.patch(`/samaj/announcements/${editingId}/`, {
-                    title: newsTitle,
-                    content: newsContent,
-                    is_important: isImportant
-                });
+                await api.patch(`/samaj/announcements/${editingId}/`, formData, config);
             } else {
                 // CREATE new news
-                await api.post('/samaj/announcements/', {
-                    title: newsTitle,
-                    content: newsContent,
-                    is_important: isImportant
-                });
+                await api.post('/samaj/announcements/', formData, config);
             }
             
             // Clear inputs
@@ -101,13 +121,13 @@ export default function CommunityHomePage() {
             fetchData(); 
         } catch (error) {
             console.error("Failed to post news", error);
-            alert("Failed to save announcement. Please try again.");
+            alert("Failed to save announcement. Please check files and try again.");
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    // 🌟 Handle Delete
+    // 🌟 Handle Delete (Kept exactly as you had it)
     const handleDeleteNews = async (id: number) => {
         if (window.confirm("Are you sure you want to delete this announcement? This cannot be undone.")) {
             try {
@@ -125,6 +145,8 @@ export default function CommunityHomePage() {
         setNewsTitle(news.title);
         setNewsContent(news.content);
         setIsImportant(news.is_important);
+        setNewsImage(null); // Clear pending files when editing starts
+        setNewsDocument(null);
         setEditingId(news.id);
         window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to top so admin can see the form
     };
@@ -133,7 +155,12 @@ export default function CommunityHomePage() {
         setNewsTitle('');
         setNewsContent('');
         setIsImportant(false);
+        setNewsImage(null);
+        setNewsDocument(null);
         setEditingId(null);
+        // Clear file inputs
+        if (imageInputRef.current) imageInputRef.current.value = '';
+        if (documentInputRef.current) documentInputRef.current.value = '';
     };
 
     const formatEmployment = (type: string) => {
@@ -233,6 +260,21 @@ export default function CommunityHomePage() {
                                         onChange={(e) => setNewsContent(e.target.value)}
                                         className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-purple-500 font-medium resize-none text-gray-900"
                                     />
+                                    
+                                    {/* 🌟 NEW: File Upload Buttons */}
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <input type="file" ref={imageInputRef} onChange={(e) => setNewsImage(e.target.files?.[0] || null)} accept="image/*" className="hidden" />
+                                        <input type="file" ref={documentInputRef} onChange={(e) => setNewsDocument(e.target.files?.[0] || null)} accept=".pdf,.doc,.docx" className="hidden" />
+                                        
+                                        <button onClick={() => imageInputRef.current?.click()} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition ${newsImage ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}>
+                                            <ImageIcon size={14} /> {newsImage ? 'Image Selected' : 'Add Image'}
+                                        </button>
+                                        
+                                        <button onClick={() => documentInputRef.current?.click()} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition ${newsDocument ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}>
+                                            <Paperclip size={14} /> {newsDocument ? 'PDF Selected' : 'Add PDF'}
+                                        </button>
+                                    </div>
+
                                     <div className="flex items-center justify-between pt-1">
                                         <label className="flex items-center gap-2 text-sm font-bold text-gray-600 cursor-pointer">
                                             <input 
@@ -244,24 +286,24 @@ export default function CommunityHomePage() {
                                             Mark as Important
                                         </label>
                                         
-                                    <div className="flex items-center gap-3">
-                                        {editingId && (
+                                        <div className="flex items-center gap-3">
+                                            {editingId && (
+                                                <button 
+                                                    onClick={cancelEdit}
+                                                    className="text-gray-600 bg-gray-100 hover:bg-gray-200 font-bold px-4 py-2 rounded-lg text-sm transition"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            )}
                                             <button 
-                                                onClick={cancelEdit}
-                                                className="text-gray-600 bg-gray-100 hover:bg-gray-200 font-bold px-4 py-2 rounded-lg text-sm transition"
+                                                onClick={handlePostNews}
+                                                disabled={isSubmitting || !newsTitle.trim() || !newsContent.trim()}
+                                                className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-2 px-6 rounded-lg text-sm transition shadow-sm flex items-center gap-2"
                                             >
-                                                Cancel
+                                                {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+                                                {editingId ? 'Update News' : 'Post News'}
                                             </button>
-                                        )}
-                                        <button 
-                                            onClick={handlePostNews}
-                                            disabled={isSubmitting || !newsTitle.trim() || !newsContent.trim()}
-                                            className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-2 px-6 rounded-lg text-sm transition shadow-sm flex items-center gap-2"
-                                        >
-                                            {isSubmitting && <Loader2 size={16} className="animate-spin" />}
-                                            {editingId ? 'Update News' : 'Post News'}
-                                        </button>
-                                    </div>
+                                        </div>
 
                                     </div>
                                 </div>
@@ -318,7 +360,36 @@ export default function CommunityHomePage() {
                                     </div>
                                     
                                     <h3 className="text-lg font-black text-gray-800 mb-2">{news.title}</h3>
-                                    <p className="text-gray-700 font-medium whitespace-pre-wrap leading-relaxed">{news.content}</p>
+                                    <p className="text-gray-700 font-medium whitespace-pre-wrap leading-relaxed mb-4">{news.content}</p>
+
+                                    {/* 🌟 NEW: DISPLAY IMAGE IF IT EXISTS */}
+                                    {news.image && (
+                                        <div className="mb-4">
+                                            <img 
+                                                src={getFileUrl(news.image)} 
+                                                alt="Announcement attachment" 
+                                                className="w-full max-h-[400px] object-contain bg-gray-50 rounded-xl border border-gray-100" 
+                                            />
+                                        </div>
+                                    )}
+                                    
+                                    {/* 🌟 NEW: DISPLAY DOCUMENT (PDF) IF IT EXISTS */}
+                                    {news.document && (
+                                        <div className="mb-4">
+                                            <a 
+                                                href={getFileUrl(news.document)} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer" 
+                                                className="flex items-center gap-3 p-3 bg-orange-50 border border-orange-100 rounded-xl text-orange-700 font-bold hover:bg-orange-100 transition"
+                                            >
+                                                <div className="bg-orange-200 p-2 rounded-lg text-orange-800">
+                                                    <Paperclip size={18} />
+                                                </div>
+                                                View Attached Document (PDF)
+                                            </a>
+                                        </div>
+                                    )}
+
                                 </div>
                             ))
                         )}
