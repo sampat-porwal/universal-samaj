@@ -4,6 +4,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import viewsets, serializers
 from django.db.models import Count
 
+from core_app.models import SamajAnnouncement
+
+
 # ── 1. Import from core_app ──
 from core_app.models import SamajProfile, Gotra
 
@@ -69,6 +72,40 @@ class DashboardAnalyticsView(APIView):
                 "employment": list(employment_stats),
             }
         })
+    
+
+
+# 1. Serializer
+class SamajAnnouncementSerializer(serializers.ModelSerializer):
+    author_name = serializers.SerializerMethodField()
+    author_role = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SamajAnnouncement
+        fields = ['id', 'title', 'content', 'is_important', 'created_at', 'author_name', 'author_role']
+
+    def get_author_name(self, obj):
+        if obj.created_by:
+            return f"{obj.created_by.first_name} {obj.created_by.last_name}".strip()
+        return "Samaj Admin"
+        
+    def get_author_role(self, obj):
+        if obj.created_by:
+            return obj.created_by.get_role_display()
+        return "Official"
+
+# 2. ViewSet
+class SamajAnnouncementViewSet(viewsets.ModelViewSet):
+    queryset = SamajAnnouncement.objects.all()
+    serializer_class = SamajAnnouncementSerializer
+    permission_classes = [IsAuthenticated]
+
+    # Automatically set the 'created_by' field to the logged-in admin
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+
+
 
 # from rest_framework import viewsets
 # from rest_framework.permissions import IsAuthenticated

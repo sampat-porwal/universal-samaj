@@ -325,3 +325,16 @@ class Gotra(models.Model):
 
     def __str__(self):
         return self.name_en
+
+
+
+class SamajAnnouncement(SamajBaseModel):
+    title = models.CharField(max_length=255)
+    content = models.TextField()
+    is_important = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at'] # Newest first
+
+    def __str__(self):
+        return self.title

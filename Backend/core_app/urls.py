@@ -16,7 +16,12 @@ from .settings_views import SettingsSchemaView
 from .ai_views import UniversalAIChatView
 from .finance_views import UniversalPaymentView
 
-from .views import DashboardAnalyticsView # Make sure this is imported
+# 🌟 CLEANED: Combined all imports from views.py into one block
+from .views import (
+    DashboardAnalyticsView,
+    GotraViewSet,
+    SamajAnnouncementViewSet
+)
 
 # ── SAMAJ IMPORTS ────────────────────────────────────────────────────────────
 from .samaj_profile_views import SamajProfileViewSet
@@ -24,7 +29,7 @@ from .samaj_media_views import FamilyAlbumViewSet
 from .samaj_committee_views import SamajCommitteeViewSet
 from .tree_views import SamajFamilyTreeView
 from .samaj_csv_views import SamajCSVExportView, SamajCSVImportView  
-from .views import GotraViewSet  
+
 
 # 🌟 SAMAJ VIEWSET ROUTER
 samaj_router = DefaultRouter()
@@ -32,6 +37,7 @@ samaj_router.register(r'profiles', SamajProfileViewSet, basename='samaj-profile'
 samaj_router.register(r'albums', FamilyAlbumViewSet, basename='samaj-album')
 samaj_router.register(r'committees', SamajCommitteeViewSet, basename='samaj-committee')
 samaj_router.register(r'gotras', GotraViewSet, basename='samaj-gotra')
+samaj_router.register(r'announcements', SamajAnnouncementViewSet, basename='samaj-announcement')
 
 # ═════════════════════════════════════════════════════════════════════════════
 # URL PATTERNS
@@ -58,10 +64,10 @@ urlpatterns = [
     path('payments/', UniversalPaymentView.as_view(), name='api-payments'),
 
     # 🏛️ SAMAJ ADVANCED MODULES
-    # 1. ViewSets (Profiles, Albums, Committees, Gotras)
+    # 1. ViewSets (Profiles, Albums, Committees, Gotras, Announcements)
     path('samaj/', include(samaj_router.urls)),
     
-    # 🌟 NEW: Dashboard Stats API (Moved here with samaj/ prefix)
+    # 🌟 Dashboard Stats API
     path('samaj/dashboard-stats/', DashboardAnalyticsView.as_view(), name='samaj-dashboard-stats'),
     
     # 2. Family Tree
