@@ -245,23 +245,23 @@ export default function CommunityHomePage() {
                                         </label>
                                         
                                     <div className="flex items-center gap-3">
-    {editingId && (
-        <button 
-            onClick={cancelEdit}
-            className="text-gray-600 bg-gray-100 hover:bg-gray-200 font-bold px-4 py-2 rounded-lg text-sm transition"
-        >
-            Cancel
-        </button>
-    )}
-    <button 
-        onClick={handlePostNews}
-        disabled={isSubmitting || !newsTitle.trim() || !newsContent.trim()}
-        className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-2 px-6 rounded-lg text-sm transition shadow-sm flex items-center gap-2"
-    >
-        {isSubmitting && <Loader2 size={16} className="animate-spin" />}
-        {editingId ? 'Update News' : 'Post News'}
-    </button>
-</div>
+                                        {editingId && (
+                                            <button 
+                                                onClick={cancelEdit}
+                                                className="text-gray-600 bg-gray-100 hover:bg-gray-200 font-bold px-4 py-2 rounded-lg text-sm transition"
+                                            >
+                                                Cancel
+                                            </button>
+                                        )}
+                                        <button 
+                                            onClick={handlePostNews}
+                                            disabled={isSubmitting || !newsTitle.trim() || !newsContent.trim()}
+                                            className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-2 px-6 rounded-lg text-sm transition shadow-sm flex items-center gap-2"
+                                        >
+                                            {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+                                            {editingId ? 'Update News' : 'Post News'}
+                                        </button>
+                                    </div>
 
                                     </div>
                                 </div>
